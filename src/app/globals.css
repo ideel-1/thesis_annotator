@@ -1,26 +1,38 @@
 @import "tailwindcss";
 
+/* --- Design tokens (light by default) --- */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #ffffff;   /* page bg */
+  --foreground: #0a0a0a;   /* primary text */
+  color-scheme: light;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
+/* If you want to respect dark-system preference, keep this.
+   If you want to FORCE light always, delete this whole block. 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    color-scheme: dark;
   }
+}*/
+
+/* Tailwind v4 token bridge */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif);
+  --font-mono: var(--font-geist-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
 }
 
+/* --- Base elements --- */
+html, body { height: 100%; }
+
+/* Use the CSS variables for base colors (avoid conflicting @apply) */
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
