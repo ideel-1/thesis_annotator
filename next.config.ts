@@ -2,8 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "export",
-  trailingSlash: true, // good for Pages hosting
+  trailingSlash: true,
   reactStrictMode: true,
+  basePath: "/thesis/annotator",
+  assetPrefix: "/thesis/annotator",
 };
 
 export default nextConfig;
