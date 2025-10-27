@@ -1,8 +1,17 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { supabase } from '@/lib/supabaseClient';
 import CommentOverlay from '@/components/CommentOverlay';
 import OwnerPanel from '@/components/OwnerPanel';
+
+/* ------------------------------ Access types ------------------------------ */
+type ReviewerStatus =
+  | { state: 'idle' }               // no token present
+  | { state: 'loading' }
+  | { state: 'valid'; label: string; canComment: boolean }
+  | { state: 'invalid' };
 
 /* ------------------------------ Helpers ------------------------------ */
 
@@ -15,7 +24,6 @@ function FlowSVG({
   viewBoxHeight: number;
   pathD: string;
 }) {
-  // A single reusable, elegant dashed path with gradient + fade + outlined arrowhead
   return (
     <svg
       viewBox={`0 0 800 ${viewBoxHeight}`}
@@ -23,13 +31,10 @@ function FlowSVG({
       fill="none"
     >
       <defs>
-        {/* Subtle stroke gradient */}
         <linearGradient id="flowStroke" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#d4d4d8" />
           <stop offset="100%" stopColor="#a3a3a3" />
         </linearGradient>
-
-        {/* End fade so the line dies before the next block */}
         <linearGradient id="fadeMask" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="white" />
           <stop offset="82%" stopColor="white" />
@@ -38,17 +43,7 @@ function FlowSVG({
         <mask id="maskEnd">
           <rect width="100%" height="100%" fill="url(#fadeMask)" />
         </mask>
-
-        {/* Outlined chevron arrowhead (no fill) */}
-        <marker
-          id="arrowhead"
-          viewBox="0 0 10 10"
-          refX="9"
-          refY="5"
-          markerWidth="8"
-          markerHeight="8"
-          orient="auto"
-        >
+        <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
           <path
             d="M0,0 L10,5 L0,10"
             fill="none"
@@ -60,7 +55,6 @@ function FlowSVG({
           />
         </marker>
       </defs>
-
       <path
         d={pathD}
         stroke="url(#flowStroke)"
@@ -72,6 +66,15 @@ function FlowSVG({
         markerEnd="url(#arrowhead)"
       />
     </svg>
+  );
+}
+function BulletList({ items }: { items: string[] }) {
+  return (
+    <ul className="list-disc pl-5 space-y-2 text-sm text-neutral-700 leading-[1.85] tracking-[0.01em]">
+      {items.map((t, i) => (
+        <li key={i}>{t}</li>
+      ))}
+    </ul>
   );
 }
 
@@ -92,21 +95,12 @@ function Card({
     'absolute top-1/2 -translate-y-1/2 w-6 h-6 rotate-45 bg-white ring-1 ring-black/5 shadow-[6px_6px_20px_rgba(0,0,0,0.06)]';
   return (
     <div
-      className={`reveal absolute ${
-        side === 'left' ? 'left-[8%]' : 'right-[8%]'
-      } ${width} ${className ?? ''}`}
+      className={`reveal absolute ${side === 'left' ? 'left-[8%]' : 'right-[8%]'} ${width} ${className ?? ''}`}
     >
       <div className="relative rounded-2xl bg-white/90 ring-1 ring-black/5 shadow-[0_8px_30px_rgba(0,0,0,0.06)] backdrop-blur p-8">
-        {/* notch toward the flow line */}
-        <span
-          className={`${pointerCommon} ${
-            side === 'left' ? '-right-3' : '-left-3'
-          }`}
-        />
+        <span className={`${pointerCommon} ${side === 'left' ? '-right-3' : '-left-3'}`} />
         <h3 className="text-lg font-semibold mb-2">{title}</h3>
-        <div className="text-sm text-neutral-700 leading-[1.85] tracking-[0.01em]">
-          {children}
-        </div>
+        <div className="text-sm text-neutral-700 leading-[1.85] tracking-[0.01em]">{children}</div>
       </div>
     </div>
   );
@@ -115,17 +109,48 @@ function Card({
 /* ------------------------------ Page ------------------------------ */
 
 export default function Page() {
-  // Scroll reveal + progress active state
+  const params = useSearchParams();
+  const tokenRaw = params.get('token'); // opaque UUID string
+  const [reviewer, setReviewer] = useState<ReviewerStatus>({ state: tokenRaw ? 'loading' : 'idle' });
+
+  // Validate token with Supabase RPC (no table listing)
   useEffect(() => {
-    const reveals = Array.from(
-      document.querySelectorAll<HTMLElement>('.reveal')
-    );
+    let cancelled = false;
+    async function run() {
+      if (!tokenRaw) {
+        setReviewer({ state: 'idle' });
+        return;
+      }
+      setReviewer({ state: 'loading' });
+
+      const token = tokenRaw.trim();
+      const { data, error } = await supabase.rpc('validate_reviewer_token', { p_token: token });
+
+      if (cancelled) return;
+
+      if (error) {
+        // Treat as invalid; keep errors out of UI
+        setReviewer({ state: 'invalid' });
+        return;
+      }
+      if (!data || data.length === 0) {
+        setReviewer({ state: 'invalid' });
+        return;
+      }
+      const row = data[0];
+      setReviewer({ state: 'valid', label: row.label, canComment: !!row.can_comment });
+    }
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [tokenRaw]);
+
+  // Scroll reveal + progress active state (unchanged)
+  useEffect(() => {
+    const reveals = Array.from(document.querySelectorAll<HTMLElement>('.reveal'));
     const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) e.target.classList.add('in-view');
-        });
-      },
+      (entries) => entries.forEach((e) => { if (e.isIntersecting) e.target.classList.add('in-view'); }),
       { threshold: 0.12 }
     );
     reveals.forEach((el) => io.observe(el));
@@ -136,9 +161,7 @@ export default function Page() {
         entries.forEach((e) => {
           const id = e.target.getAttribute('id');
           if (!id) return;
-          const link = document.querySelector<HTMLAnchorElement>(
-            `#progress a[href="#${id}"]`
-          );
+          const link = document.querySelector<HTMLAnchorElement>(`#progress a[href="#${id}"]`);
           if (link) link.dataset.active = e.isIntersecting ? 'true' : 'false';
         });
       },
@@ -155,10 +178,54 @@ export default function Page() {
     };
   }, []);
 
+  const Banner = () => {
+    if (reviewer.state === 'loading') {
+      return (
+        <div className="fixed top-0 inset-x-0 z-40 bg-neutral-900 text-white text-center py-2 text-sm">
+          Validating reviewer link…
+        </div>
+      );
+    }
+    if (reviewer.state === 'valid') {
+      if (!reviewer.canComment) {
+        return (
+          <div className="fixed top-0 inset-x-0 z-40 bg-amber-500 text-black text-center py-2 text-sm">
+            Reviewer {reviewer.label} — view-only (commenting disabled)
+          </div>
+        );
+      }
+      return (
+        <div className="fixed top-0 inset-x-0 z-40 bg-emerald-600 text-white text-center py-2 text-sm">
+          Reviewer {reviewer.label} — commenting enabled
+        </div>
+      );
+    }
+    if (reviewer.state === 'invalid') {
+      return (
+        <div className="fixed top-0 inset-x-0 z-40 bg-red-600 text-white text-center py-2 text-sm">
+          Invalid or expired link — view-only
+        </div>
+      );
+    }
+    // idle: public view
+    return (
+      <div className="fixed top-0 inset-x-0 z-40 bg-neutral-100 text-neutral-700 text-center py-2 text-sm">
+        Public view — comments disabled (append ?token=… to enable for reviewers)
+      </div>
+    );
+  };
+
+  const commentingEnabled = reviewer.state === 'valid' && reviewer.canComment;
+
   return (
     <main className="relative bg-[radial-gradient(ellipse_at_top,rgba(0,0,0,0.03),transparent_60%)] text-neutral-900 overflow-x-hidden">
-      {/* global overlays */}
-      <CommentOverlay />
+      {/* Access banner */}
+      <Banner />
+
+      {/* Global overlays */}
+      {commentingEnabled ? (
+        <CommentOverlay reviewerLabel={(reviewer as Extract<ReviewerStatus, { state: 'valid' }>).label} />
+      ) : null}
       <OwnerPanel />
 
       {/* sticky right-rail progress */}
@@ -198,7 +265,49 @@ export default function Page() {
         <h1 className="text-3xl md:text-5xl font-semibold tracking-tight mb-10 text-center">
           Master Thesis: defining the value argument for design
         </h1>
-
+        {/* Reviewer instructions */}
+        {commentingEnabled && (
+        <div className="max-w-3xl mx-auto mb-10">
+        <div className="relative overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[0_20px_60px_-20px_rgba(16,185,129,0.45),0_10px_30px_-10px_rgba(0,0,0,0.08)]">
+          {/* left accent */}
+          <span className="absolute left-0 top-0 h-full w-1.5 bg-emerald-400/80" />
+          <div className="p-6 md:p-8">
+            <div className="flex items-center gap-3 mb-3">
+              {/* info icon (inline) */}
+              <img
+                src="/icons/info-icon.svg"
+                alt="Organizational context"
+                className="w-4 h-4 opacity-90 transition group-hover:scale-110"
+              />
+              <h2 className="text-base md:text-lg font-semibold text-neutral-900">
+                How to review this document
+              </h2>
+            </div>
+      
+            <div className="space-y-3 text-[15px] leading-7 text-neutral-800">
+              <p>
+                This page is interactive. Leave comments directly on the content:
+                <strong> right-click anywhere</strong> to create a comment box. Drag
+                to reposition, collapse to minimize, or delete from the box controls.
+              </p>
+              <p>
+                Your notes are <strong>linked to your reviewer token</strong> and are
+                visible only to you and the author. Use the small toggle in the top-left to switch
+                between editing and reading modes.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+        )}
+        {/* After the instruction card */}
+      <div className="relative max-w-6xl mx-auto px-6 mt-20 mb-10">
+        <div className="h-px w-full bg-gradient-to-r from-transparent via-neutral-200 to-transparent" />
+        <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-white px-3 text-xs tracking-wide text-neutral-600">
+          Content begins below
+        </span>
+      </div>
         <div className="max-w-3xl mx-auto bg-white border border-neutral-200 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.06)] p-8 mb-20">
           <h2 className="text-lg font-semibold text-neutral-900 mb-4">
             Throughline
@@ -226,18 +335,11 @@ export default function Page() {
               context
             </h3>
             {/* simple mountain icon */}
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="w-12 h-12 transition group-hover:scale-110"
-            >
-              <path d="M12 2L2 22h20L12 2z" />
-              <path d="M12 13l3 5H9l3-5z" />
-            </svg>
+            <img
+              src="/icons/mountain.svg"
+              alt="Organizational context"
+              className="w-12 h-12 opacity-90 transition group-hover:scale-110"
+            />
           </a>
 
           {/* 2 */}
@@ -251,19 +353,11 @@ export default function Page() {
               content
             </h3>
             {/* prism-ish icon */}
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="w-12 h-12 transition group-hover:scale-110"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <path d="M2 12h20" />
-              <path d="M12 2a15 15 0 010 20" />
-            </svg>
+            <img
+              src="/icons/lens.svg"
+              alt="Organizational context"
+              className="w-12 h-12 opacity-90 transition group-hover:scale-110"
+            />
           </a>
 
           {/* 3 */}
@@ -277,20 +371,11 @@ export default function Page() {
               tactics
             </h3>
             {/* chat bubble */}
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="w-12 h-12 transition group-hover:scale-110"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <circle cx="9" cy="10" r="1" />
-              <circle cx="15" cy="10" r="1" />
-              <path d="M8 15c1.333 1 2.667 1 4 0" />
-            </svg>
+            <img
+              src="/icons/bubble.svg"
+              alt="Organizational context"
+              className="w-12 h-12 opacity-90 transition group-hover:scale-110"
+            />
           </a>
         </div>
       </section>
@@ -328,7 +413,7 @@ export default function Page() {
 
         {/* Flow line */}
         <FlowSVG
-          className="top-[150px] w-[900px] h-[2300px]"
+          className="top-[450px] w-[900px] h-[2300px]"
           viewBoxHeight={2300}
           pathD={`M450 400
                    C400 480, 300 600, 430 850
@@ -338,47 +423,56 @@ export default function Page() {
 
         {/* Four subchapters */}
         <div className="relative min-h-[450px] flex items-center">
-          <Card side="left" title="Organizational Position of Design">
-            Design’s structural placement conditions advocacy. Centralized teams
-            offer coherence and scale but risk isolation; embedded models gain
-            proximity yet fragment. Seniority and executive access vary (often
-            no Chief Design Officer), shaping whether design enters strategy or
-            remains delivery-focused. Under-resourcing (e.g., one designer to
-            dozens of developers) can further marginalize influence.
-          </Card>
-        </div>
+  <Card side="left" title="Organizational Position of Design">
+    <BulletList
+      items={[
+        "Design’s structural placement conditions advocacy.",
+        "Centralized teams offer coherence and scale but risk isolation.",
+        "Embedded models gain proximity yet can fragment.",
+        "Seniority and executive access vary (often no Chief Design Officer), shaping whether design enters strategy or remains delivery-focused.",
+        "Under-resourcing (e.g., one designer to dozens of developers) can further marginalize influence."
+      ]}
+    />
+  </Card>
+</div>
 
-        <div className="relative min-h-[450px] flex items-center">
-          <Card side="right" title="Nature of Advocacy Work">
-            Advocacy appears as everyday work that expands design from execution
-            toward upstream problem framing. Leaders mature the function amid
-            uneven literacy, reframing design from “making things pretty” to
-            stewarding customer knowledge and improving decisions. It is
-            proactive role-making: moving design upstream while building
-            organizational understanding of its broader scope.
-          </Card>
-        </div>
+<div className="relative min-h-[450px] flex items-center">
+  <Card side="right" title="Nature of Advocacy Work">
+    <BulletList
+      items={[
+        "Advocacy appears as everyday work that expands design from execution toward upstream problem framing.",
+        "Leaders mature the function amid uneven literacy, reframing design from “making things pretty” to stewarding customer knowledge and improving decisions.",
+        "The purpose of advocacy is proactive role-making: moving design upstream while building organizational understanding of its broader scope."
+      ]}
+    />
+  </Card>
+</div>
 
-        <div className="relative min-h-[450px] flex items-center">
-          <Card side="left" title="Internal Stakeholders and Audiences">
-            Audiences include executives, peer leads, and middle managers with
-            diverse priors. At board level, finance/metrics often dominate;
-            middle management may favor copying competitors or skipping
-            research. Literacy varies by department, shaping receptivity.
-            Positive exposure to good design creates allies; absence of exposure
-            sustains stereotypes.
-          </Card>
-        </div>
+<div className="relative min-h-[450px] flex items-center">
+  <Card side="left" title="Internal Stakeholders and Audiences">
+    <BulletList
+      items={[
+        "Audiences include executives, peer leads, and middle managers with diverse priors.",
+        "At board level, finance/metrics often dominate; middle management may favor copying competitors or skipping research.",
+        "Literacy varies by department, shaping receptivity.",
+        "Positive exposure to good design creates allies; absence of exposure sustains stereotypes."
+      ]}
+    />
+  </Card>
+</div>
 
-        <div className="relative min-h-[450px] flex items-center">
-          <Card side="right" title="Constraints and Enablers">
-            Barriers include legacy hierarchies, siloed structures, mindset
-            inertia, and scarce resources. Enablers include executive
-            sponsorship, rising design literacy, process changes that integrate
-            design, and success stories that tie work to KPIs. Over time, these
-            forces can elevate design’s standing and open earlier involvement.
-          </Card>
-        </div>
+<div className="relative min-h-[450px] flex items-center">
+  <Card side="right" title="Constraints and Enablers">
+    <BulletList
+      items={[
+        "Barriers include legacy hierarchies, siloed structures, mindset inertia, and scarce resources.",
+        "Enablers include executive sponsorship, rising design literacy, and process changes that integrate design.",
+        "Success stories tied to KPIs build legitimacy.",
+        "Over time, these forces can elevate design’s standing and open earlier involvement."
+      ]}
+    />
+  </Card>
+</div>
 
         {/* Handoff to Content */}
         <div className="text-center max-w-4xl mx-auto mt-10">
@@ -421,12 +515,12 @@ export default function Page() {
 
         {/* Throughline for 4 items; ends before themes */}
         <FlowSVG
-          className="top-[150px] w-[900px] h-[2200px]"
+          className="top-[350px] w-[900px] h-[2200px]"
           viewBoxHeight={2200}
           pathD={`M450 400 
                    C400 450, 350 500, 450 750 
                    C550 1000, 250 1250, 400 1500 
-                   C550 1750, 250 2000, 400 2250`}
+                   C550 1750, 250 2000, 400 2150`}
         />
 
         {/* 1 */}
@@ -488,7 +582,7 @@ export default function Page() {
             </h5>
             <p className="text-sm text-neutral-700 leading-[1.85] tracking-[0.01em]">
               Shared standards and systems create coherence at scale, reduce
-              ambiguity, and compound trust over time—often becoming a subtle,
+              ambiguity, and compound trust over time - often becoming a subtle,
               durable differentiator.
             </p>
           </div>
@@ -545,13 +639,13 @@ export default function Page() {
 
         {/* Throughline weaving 6 items (tighter spacing) */}
         <FlowSVG
-          className="top-[150px] w-[900px] h-[2400px]"
+          className="top-[300px] w-[900px] h-[2200px]"
           viewBoxHeight={2400}
           pathD={`M450 380
                    C400 520, 300 680, 430 860
                    C560 1040, 260 1220, 400 1400
                    C560 1580, 260 1760, 400 1940
-                   C560 2120, 260 2300, 400 2480`}
+                   C560 2120, 260 2220, 450 2450`}
         />
 
         <div className="relative min-h-[340px] flex items-center">
@@ -575,7 +669,7 @@ export default function Page() {
         <div className="relative min-h-[340px] flex items-center">
           <Card side="left" title="Translating Design into Business">
             Leaders mirror stakeholders’ vocabulary, focusing on design’s value
-            to revenue, efficiency, risk, and ROI—avoiding design jargon. The
+            to revenue, efficiency, risk, and ROI - avoiding design jargon. The
             reframing connects outcomes to the metrics and horizons executives
             already use to decide.
           </Card>
@@ -605,6 +699,8 @@ export default function Page() {
             organization.
           </Card>
         </div>
+        
+        
 
         {/* Synthesis (no line here) */}
         <div className="text-center max-w-4xl mx-auto mt-10">
@@ -624,11 +720,12 @@ export default function Page() {
             metric).
             <br />
             <br />
-            <strong>Third,</strong> let the wins leave a trail. Each successful
-            demo, small talk, or conversation helps reinforce that design really
-            does bring value. Over time, these traces accumulate—standards
-            cohere, numbers reappear in reviews, stories are retold by
-            non-designers—and the organization sometimes shifts.
+            <strong>Third,</strong> let the wins leave a trail. 
+            Each successful demo, small talk or conversation helps
+            reinforce that design really does bring value. And over time,
+            these traces accumulate: standards cohere, numbers reappear
+            in reviews, stories are retold by non-designers, and the the
+            organization sometimes shifts.
             <br />
             <br />
             In that narrative, design stops arguing for its place because the
