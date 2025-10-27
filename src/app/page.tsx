@@ -1,19 +1,5 @@
-'use client';
-
-import { useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabaseClient';
-import CommentOverlay from '@/components/CommentOverlay';
-import OwnerPanel from '@/components/OwnerPanel';
-
-/* ------------------------------ Access types ------------------------------ */
-type ReviewerStatus =
-  | { state: 'idle' }               // no token present
-  | { state: 'loading' }
-  | { state: 'valid'; label: string; canComment: boolean }
-  | { state: 'invalid' };
-
-/* ------------------------------ Helpers ------------------------------ */
+import { Suspense } from "react";
+import ClientAnnotator from "./ClientAnnotator"; 
 
 function FlowSVG({
   className,
@@ -109,124 +95,12 @@ function Card({
 /* ------------------------------ Page ------------------------------ */
 
 export default function Page() {
-  const params = useSearchParams();
-  const tokenRaw = params.get('token'); // opaque UUID string
-  const [reviewer, setReviewer] = useState<ReviewerStatus>({ state: tokenRaw ? 'loading' : 'idle' });
-
-  // Validate token with Supabase RPC (no table listing)
-  useEffect(() => {
-    let cancelled = false;
-    async function run() {
-      if (!tokenRaw) {
-        setReviewer({ state: 'idle' });
-        return;
-      }
-      setReviewer({ state: 'loading' });
-
-      const token = tokenRaw.trim();
-      const { data, error } = await supabase.rpc('validate_reviewer_token', { p_token: token });
-
-      if (cancelled) return;
-
-      if (error) {
-        // Treat as invalid; keep errors out of UI
-        setReviewer({ state: 'invalid' });
-        return;
-      }
-      if (!data || data.length === 0) {
-        setReviewer({ state: 'invalid' });
-        return;
-      }
-      const row = data[0];
-      setReviewer({ state: 'valid', label: row.label, canComment: !!row.can_comment });
-    }
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [tokenRaw]);
-
-  // Scroll reveal + progress active state (unchanged)
-  useEffect(() => {
-    const reveals = Array.from(document.querySelectorAll<HTMLElement>('.reveal'));
-    const io = new IntersectionObserver(
-      (entries) => entries.forEach((e) => { if (e.isIntersecting) e.target.classList.add('in-view'); }),
-      { threshold: 0.12 }
-    );
-    reveals.forEach((el) => io.observe(el));
-
-    const ids = ['overview', 'context', 'what', 'how'];
-    const po = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          const id = e.target.getAttribute('id');
-          if (!id) return;
-          const link = document.querySelector<HTMLAnchorElement>(`#progress a[href="#${id}"]`);
-          if (link) link.dataset.active = e.isIntersecting ? 'true' : 'false';
-        });
-      },
-      { rootMargin: '-40% 0px -50% 0px', threshold: 0.01 }
-    );
-    ids.forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) po.observe(el);
-    });
-
-    return () => {
-      io.disconnect();
-      po.disconnect();
-    };
-  }, []);
-
-  const Banner = () => {
-    if (reviewer.state === 'loading') {
-      return (
-        <div className="fixed top-0 inset-x-0 z-40 bg-neutral-900 text-white text-center py-2 text-sm">
-          Validating reviewer link…
-        </div>
-      );
-    }
-    if (reviewer.state === 'valid') {
-      if (!reviewer.canComment) {
-        return (
-          <div className="fixed top-0 inset-x-0 z-40 bg-amber-500 text-black text-center py-2 text-sm">
-            Reviewer {reviewer.label} — view-only (commenting disabled)
-          </div>
-        );
-      }
-      return (
-        <div className="fixed top-0 inset-x-0 z-40 bg-emerald-600 text-white text-center py-2 text-sm">
-          Reviewer {reviewer.label} — commenting enabled
-        </div>
-      );
-    }
-    if (reviewer.state === 'invalid') {
-      return (
-        <div className="fixed top-0 inset-x-0 z-40 bg-red-600 text-white text-center py-2 text-sm">
-          Invalid or expired link — view-only
-        </div>
-      );
-    }
-    // idle: public view
-    return (
-      <div className="fixed top-0 inset-x-0 z-40 bg-neutral-100 text-neutral-700 text-center py-2 text-sm">
-        Public view — comments disabled (append ?token=… to enable for reviewers)
-      </div>
-    );
-  };
-
-  const commentingEnabled = reviewer.state === 'valid' && reviewer.canComment;
-
   return (
     <main className="relative bg-[radial-gradient(ellipse_at_top,rgba(0,0,0,0.03),transparent_60%)] text-neutral-900 overflow-x-hidden">
-      {/* Access banner */}
-      <Banner />
-
-      {/* Global overlays */}
-      {commentingEnabled ? (
-        <CommentOverlay reviewerLabel={(reviewer as Extract<ReviewerStatus, { state: 'valid' }>).label} />
-      ) : null}
-      <OwnerPanel />
+      {/* Mount all client-side logic (token validation, overlays) */}
+      <Suspense fallback={null}>
+        <ClientAnnotator />
+      </Suspense>
 
       {/* sticky right-rail progress */}
       <nav
@@ -265,42 +139,7 @@ export default function Page() {
         <h1 className="text-3xl md:text-5xl font-semibold tracking-tight mb-10 text-center">
           Master Thesis: defining the value argument for design
         </h1>
-        {/* Reviewer instructions */}
-        {commentingEnabled && (
-        <div className="max-w-3xl mx-auto mb-10">
-        <div className="relative overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[0_20px_60px_-20px_rgba(16,185,129,0.45),0_10px_30px_-10px_rgba(0,0,0,0.08)]">
-          {/* left accent */}
-          <span className="absolute left-0 top-0 h-full w-1.5 bg-emerald-400/80" />
-          <div className="p-6 md:p-8">
-            <div className="flex items-center gap-3 mb-3">
-              {/* info icon (inline) */}
-              <img
-                src="/icons/info-icon.svg"
-                alt="Organizational context"
-                className="w-4 h-4 opacity-90 transition group-hover:scale-110"
-              />
-              <h2 className="text-base md:text-lg font-semibold text-neutral-900">
-                How to review this document
-              </h2>
-            </div>
-      
-            <div className="space-y-3 text-[15px] leading-7 text-neutral-800">
-              <p>
-                This page is interactive. Leave comments directly on the content:
-                <strong> right-click anywhere</strong> to create a comment box. Drag
-                to reposition, collapse to minimize, or delete from the box controls.
-              </p>
-              <p>
-                Your notes are <strong>linked to your reviewer token</strong> and are
-                visible only to you and the author. Use the small toggle in the top-left to switch
-                between editing and reading modes.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-        )}
+        
         {/* After the instruction card */}
       <div className="relative max-w-6xl mx-auto px-6 mt-20 mb-10">
         <div className="h-px w-full bg-gradient-to-r from-transparent via-neutral-200 to-transparent" />
@@ -523,49 +362,53 @@ export default function Page() {
                    C550 1750, 250 2000, 400 2150`}
         />
 
-        {/* 1 */}
-        <div className="relative min-h-[450px] flex items-center">
-          <Card side="left" title="Design as Connection to Customer">
-            The dominant value claim positions design as the organization’s
-            voice of the customer. Through research, journey maps, and direct
-            user exposure, design corrects internal bias and de-risks bets,
-            giving leaders confidence they are “doing the right thing” for
-            customers and the business.
-          </Card>
-        </div>
+<div className="relative min-h-[450px] flex items-center">
+  <Card side="left" title="Design as Connection to Customer">
+    <BulletList
+      items={[
+        "Design positions itself as the organization’s voice of the customer.",
+        "Research, journey maps, and direct user exposure correct internal bias and de-risk bets.",
+        "Leaders gain confidence they are doing the right thing for customers and the business."
+      ]}
+    />
+  </Card>
+</div>
 
-        {/* 2 */}
-        <div className="relative min-h-[450px] flex items-center">
-          <Card side="right" title="Design as Integrator and Efficiency Enabler">
-            Design acts as “the glue” that bridges silos and aligns product,
-            engineering, and business. Early testing and prototyping prevent
-            rework, saving time and money while improving collaboration quality.
-            The claim resonates with stakeholders focused on speed, ROI, and
-            execution risk.
-          </Card>
-        </div>
+<div className="relative min-h-[450px] flex items-center">
+  <Card side="right" title="Design as Integrator and Efficiency Enabler">
+    <BulletList
+      items={[
+        "Design acts as the glue bridging silos and aligning product, engineering, and business.",
+        "Early testing and prototyping prevent rework, saving time and money.",
+        "The claim resonates with stakeholders focused on speed, ROI, and execution risk."
+      ]}
+    />
+  </Card>
+</div>
 
-        {/* 3 (slightly wider to echo your screenshot) */}
-        <div className="relative min-h-[450px] flex items-center">
-          <Card side="left" width="w-[450px]" title="Design as Differentiator and Quality Standard">
-            Design elevates experience quality and brand trust, creating
-            competitive advantage when features converge. Leaders stress how
-            consistent high-quality contributes to market-relevant outcomes.
-            Some contexts avoid this lens if the market is less competitive,
-            the company is more mature, or they want to avoid positioning design
-            as merely aesthetic.
-          </Card>
-        </div>
+<div className="relative min-h-[450px] flex items-center">
+  <Card side="left" width="w-[450px]" title="Design as Differentiator and Quality Standard">
+    <BulletList
+      items={[
+        "Design elevates experience quality and brand trust when features converge.",
+        "Consistency in high quality contributes to market-relevant outcomes.",
+        "Some contexts avoid this lens when markets are less competitive, companies are more mature, or to avoid reducing design to aesthetics."
+      ]}
+    />
+  </Card>
+</div>
 
-        {/* 4 */}
-        <div className="relative min-h-[450px] flex items-center">
-          <Card side="right" title="Design as Strategic Lens and Vision Caster">
-            As credibility grows, design can contribute to upstream framing and
-            futures work. Leaders use design’s capability to prototype ideas
-            fast to inform strategy, typically in more mature contexts where
-            prior wins have earned a seat in strategic dialogues.
-          </Card>
-        </div>
+<div className="relative min-h-[450px] flex items-center">
+  <Card side="right" title="Design as Strategic Lens and Vision Caster">
+    <BulletList
+      items={[
+        "With credibility, design contributes to upstream framing and futures work.",
+        "Rapid prototyping informs strategy and option creation.",
+        "This typically happens in more mature contexts after prior wins earn strategic access."
+      ]}
+    />
+  </Card>
+</div>
 
         <div className="text-center max-w-4xl mx-auto mb-16">
           <p className="text-left text-neutral-600 leading-[1.85] tracking-[0.01em] text-3xl">
@@ -648,57 +491,74 @@ export default function Page() {
                    C560 2120, 260 2220, 450 2450`}
         />
 
-        <div className="relative min-h-[340px] flex items-center">
-          <Card side="left" title='Tangible Demonstration: “Show, Don’t Tell”'>
-            Persuasion begins with visible results: small demos, quick examples,
-            and “vision designs” replace abstract claims. Producing something
-            concrete shifts conversations from opinion to evidence and
-            accelerates influence.
-          </Card>
-        </div>
+<div className="relative min-h-[340px] flex items-center">
+  <Card side="left" title='Tangible Demonstration: “Show, Don’t Tell”'>
+    <BulletList
+      items={[
+        "Persuasion starts with visible results: small demos, quick examples, and vision designs.",
+        "Concrete artifacts shift conversations from opinion to evidence.",
+        "Demonstrations accelerate influence."
+      ]}
+    />
+  </Card>
+</div>
 
-        <div className="relative min-h-[340px] flex items-center">
-          <Card side="right" title="Prototypes and Artifacts">
-            Mock-ups, journey maps, and customer videos operate as shared
-            reference points that help align teams, reduce ambiguity, and
-            de-risk investment. Even rough models move debates forward by
-            inviting concrete feedback and user validation.
-          </Card>
-        </div>
+<div className="relative min-h-[340px] flex items-center">
+  <Card side="right" title="Prototypes and Artifacts">
+    <BulletList
+      items={[
+        "Mock-ups, journey maps, and customer videos serve as shared references.",
+        "They align teams, reduce ambiguity, and de-risk investment.",
+        "Even rough models invite concrete feedback and validation."
+      ]}
+    />
+  </Card>
+</div>
 
-        <div className="relative min-h-[340px] flex items-center">
-          <Card side="left" title="Translating Design into Business">
-            Leaders mirror stakeholders’ vocabulary, focusing on design’s value
-            to revenue, efficiency, risk, and ROI - avoiding design jargon. The
-            reframing connects outcomes to the metrics and horizons executives
-            already use to decide.
-          </Card>
-        </div>
+<div className="relative min-h-[340px] flex items-center">
+  <Card side="left" title="Translating Design into Business">
+    <BulletList
+      items={[
+        "Leaders mirror stakeholders’ vocabulary: revenue, efficiency, risk, ROI.",
+        "Avoid design jargon; connect outcomes to existing metrics and decision horizons."
+      ]}
+    />
+  </Card>
+</div>
 
-        <div className="relative min-h-[340px] flex items-center">
-          <Card side="right" title="Metrics and External Legitimacy">
-            Arguments are substantiated with quantitative indicators and
-            benchmarks. Tying work to numbers is essential for attention and
-            prioritization.
-          </Card>
-        </div>
+<div className="relative min-h-[340px] flex items-center">
+  <Card side="right" title="Metrics and External Legitimacy">
+    <BulletList
+      items={[
+        "Arguments are substantiated with quantitative indicators and benchmarks.",
+        "Numbers are essential for attention, prioritization, and resource decisions."
+      ]}
+    />
+  </Card>
+</div>
 
-        <div className="relative min-h-[340px] flex items-center">
-          <Card side="left" title="Participation and Small Wins">
-            Co-testing, workshops, and pilots invite skeptics into the process.
-            Hands-on exposure turns minds, builds empathy, and creates
-            incremental wins that travel across teams.
-          </Card>
-        </div>
+<div className="relative min-h-[340px] flex items-center">
+  <Card side="left" title="Participation and Small Wins">
+    <BulletList
+      items={[
+        "Co-testing, workshops, and pilots invite skeptics into the process.",
+        "Hands-on exposure builds empathy and produces incremental wins that travel."
+      ]}
+    />
+  </Card>
+</div>
 
-        <div className="relative min-h-[340px] flex items-center">
-          <Card side="right" title="Sustained Advocacy and Repetition">
-            Credibility compounds through cadence: repeating key messages,
-            showcasing outcomes, and cultivating ambassadors at multiple levels
-            keeps design visible and normalizes practices across the
-            organization.
-          </Card>
-        </div>
+<div className="relative min-h-[340px] flex items-center">
+  <Card side="right" title="Sustained Advocacy and Repetition">
+    <BulletList
+      items={[
+        "Credibility compounds through cadence: repeating messages and showcasing outcomes.",
+        "Cultivating ambassadors across levels keeps design visible and normalizes practices."
+      ]}
+    />
+  </Card>
+</div>
+
         
         
 
@@ -740,18 +600,7 @@ export default function Page() {
         © {new Date().getFullYear()} — Thesis findings
       </footer>
 
-      {/* Minimal CSS for scroll reveal */}
-      <style jsx global>{`
-        .reveal {
-          opacity: 0;
-          transform: translateY(12px);
-          transition: opacity 0.6s ease, transform 0.6s ease;
-        }
-        .reveal.in-view {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      `}</style>
+      
     </main>
   );
 }
