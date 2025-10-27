@@ -1,20 +1,23 @@
-import { Suspense } from "react";
+import React, { Suspense } from "react";
 import ClientAnnotator from "./ClientAnnotator"; 
 
 function FlowSVG({
   className,
   viewBoxHeight,
   pathD,
+  style,
 }: {
   className?: string;
   viewBoxHeight: number;
   pathD: string;
+  style?: React.CSSProperties;
 }) {
   return (
     <svg
       viewBox={`0 0 800 ${viewBoxHeight}`}
       className={`absolute left-1/2 -translate-x-1/2 pointer-events-none ${className ?? ''}`}
       fill="none"
+      style={style}
     >
       <defs>
         <linearGradient id="flowStroke" x1="0" y1="0" x2="0" y2="1">
@@ -136,7 +139,7 @@ export default function Page() {
 
       {/* ------------------------ OVERVIEW ------------------------ */}
       <section id="overview" className="mx-auto max-w-6xl px-6 pt-24 pb-32" >
-        <h1 className="text-4xl font-semibold tracking-tight mb-10 text-center">
+        <h1 className="text-6xl font-semibold tracking-loose mb-26 mt-10 text-center">
           Master Thesis: defining the value argument for design
         </h1>
 
@@ -256,14 +259,18 @@ export default function Page() {
           </p>
         </div>
 
+        {/* After Context intro */}
+        <div id="notes-context-mount" className="max-w-4xl mx-auto mb-10" />
+
         {/* Flow line */}
         <FlowSVG
-          className="top-[250px] w-[900px] h-[2300px]"
+          className="w-[900px] h-[2300px]"
           viewBoxHeight={2300}
           pathD={`M450 400
                    C400 480, 300 600, 430 850
                    C560 1100, 260 1250, 400 1500
                    C560 1750, 240 1950, 400 2150`}
+          style={{ top: "calc(250px + var(--context-notes-offset, 0px))"}}
         />
 
         {/* Four subchapters */}
@@ -351,8 +358,14 @@ export default function Page() {
             differentiate the product from other companies, and as design gets
             closer to strategic level influence, the same work can also be
             framed as option creation and foresight.
-            <br />
-            <br />
+          </p>
+        </div>
+
+        {/* After Content intro */}
+        <div id="notes-content-mount" className="max-w-4xl mx-auto mb-10" />
+        
+        <div className="text-center max-w-4xl mx-auto mb-16 mt-16">
+          <p className="text-left text-neutral-800 leading-[1.85] tracking-[0.01em] text-xl">
             <strong>The following board represents how much different lenses
               appear inside the interviews. Please drag and drop, and add comments if 
               you feel like the board should be organized in a different way.
@@ -374,7 +387,7 @@ export default function Page() {
             Communication tactics
           </h2>
           <p className="text-left text-neutral-600 leading-[1.85] tracking-[0.01em] text-xl">
-            Persuasion rests on executional communication: “the how” of
+            Persuasion rests on executional communication: <strong>“the how” </strong> of
             advocacy.
             <br />
             <br />
@@ -394,16 +407,19 @@ export default function Page() {
             organization.
           </p>
         </div>
+        {/* After Communication intro */}
+        <div id="notes-communication-mount" className="max-w-4xl mx-auto mb-10" />  
 
         {/* Throughline weaving 6 items (tighter spacing) */}
         <FlowSVG
-          className="top-[300px] w-[900px] h-[2200px]"
+          className="w-[900px] h-[2200px]"
           viewBoxHeight={2400}
           pathD={`M450 380
                    C400 520, 300 680, 430 860
                    C560 1040, 260 1220, 400 1400
                    C560 1580, 260 1760, 400 1940
                    C560 2120, 260 2220, 450 2450`}
+          style={{ top: "calc(250px + var(--communication-notes-offset, 0px))" }} // NEW
         />
 
 <div className="relative min-h-[340px] flex items-center">
@@ -508,6 +524,8 @@ export default function Page() {
             decides.
           </p>
         </div>
+        {/* Before/after Synthesis (choose location) */}
+        <div id="notes-synthesis-mount" className="max-w-4xl mx-auto mt-16 mb-10" />
       </section>
 
       {/* Footer */}

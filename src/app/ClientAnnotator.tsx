@@ -7,6 +7,8 @@ import { supabase } from "@/lib/supabaseClient";
 import CommentOverlay from "@/components/CommentOverlay";
 import OwnerPanel from "@/components/OwnerPanel";
 import BoardOverlay from "@/components/BoardOverlay";
+import ReviewerNotes from "@/components/ReviewerNotes";
+
 
 
 type ReviewerStatus =
@@ -47,6 +49,7 @@ export default function ClientAnnotator() {
   const tokenRaw = params.get("token");
   const [reviewer, setReviewer] = useState<ReviewerStatus>({ state: tokenRaw ? "loading" : "idle" });
   const [mountEl, setMountEl] = useState<HTMLElement | null>(null);
+  const notesVisible = reviewer.state === "valid";
   
   const [boardMount, setBoardMount] = useState<HTMLElement | null>(null);
   useEffect(() => {
@@ -67,9 +70,17 @@ export default function ClientAnnotator() {
         return;
       }
       setReviewer({ state: "loading" });
-      const { data, error } = await supabase.rpc("validate_reviewer_token", { p_token: tokenRaw.trim() });
+      const { data, error } = await supabase.rpc("validate_reviewer_token_text", {
+        p_token: tokenRaw!.trim(),
+      });
       if (cancelled) return;
-      if (error || !data?.length) {
+      
+      if (error) {
+        console.error("validate_reviewer_token_text error:", error);
+        setReviewer({ state: "invalid" });
+        return;
+      }
+      if (!data?.length) {
         setReviewer({ state: "invalid" });
         return;
       }
@@ -95,6 +106,75 @@ export default function ClientAnnotator() {
     reveals.forEach((el) => io.observe(el));
     return () => io.disconnect();
   }, []);
+
+  function useFlowOffset({
+    sectionId,
+    mountId,
+    cssVar,
+    deps = [],
+  }: {
+    sectionId: string;
+    mountId: string;
+    cssVar: string;
+    deps?: React.DependencyList;
+  }) {
+    useEffect(() => {
+      if (typeof window === "undefined" || typeof document === "undefined") return;
+  
+      const section = document.getElementById(sectionId);
+      const mount = document.getElementById(mountId);
+      if (!section || !mount) {
+        // Uncomment for debugging:
+        // console.warn(`useFlowOffset: missing element(s)`, { sectionId, mountId, section, mount });
+        return;
+      }
+  
+      const apply = () => {
+        // Use offsetHeight for layout height (includes padding)
+        const h = mount.offsetHeight || 0;
+        section.style.setProperty(cssVar, `${h}px`);
+        // Uncomment for debugging:
+        // console.log(`[flow-offset] ${cssVar} = ${h}px on #${sectionId}`);
+      };
+  
+      // Initial measure (next frame helps after layout/paint)
+      const raf = requestAnimationFrame(apply);
+  
+      // Observe the mount’s size changes (content/quotes arriving later)
+      let ro: ResizeObserver | null = null;
+      if ("ResizeObserver" in window) {
+        ro = new ResizeObserver(apply);
+        ro.observe(mount);
+      }
+  
+      // Fallback: also recalc on window resize
+      window.addEventListener("resize", apply);
+  
+      return () => {
+        cancelAnimationFrame(raf);
+        window.removeEventListener("resize", apply);
+        if (ro) ro.disconnect();
+      };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, deps);
+  }
+  
+  
+  // Offset the CONTEXT flow by the height of the context notes card
+  useFlowOffset({
+    sectionId: "context",
+    mountId: "notes-context-mount",
+    cssVar: "--context-notes-offset",
+    deps: [notesVisible],
+  });
+  
+  // Offset the COMMUNICATION flow similarly
+  useFlowOffset({
+    sectionId: "how", // your section id for Communication (in your code it's "how")
+    mountId: "notes-communication-mount",
+    cssVar: "--communication-notes-offset",
+    deps: [notesVisible],
+  });
 
   const Banner = () => {
     if (reviewer.state === "loading")
@@ -128,9 +208,13 @@ export default function ClientAnnotator() {
           boardMount
       ) : null}
 
+      {/* NEW: per-reviewer interview notes */}
+      <ReviewerNotes token={tokenRaw} visible={notesVisible} />
+
       {commentingEnabled ? 
         <CommentOverlay reviewerLabel={reviewer.label} token={tokenRaw!}/> : null}
       <OwnerPanel />
     </>
   );
+  
 }

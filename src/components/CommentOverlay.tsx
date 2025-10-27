@@ -297,7 +297,7 @@ export default function CommentOverlay({ reviewerLabel, token }: CommentOverlayP
       {/* Editing toggle (top-left) */}
       <button
         onClick={() => setEditing((e) => !e)}
-        className="fixed z-[80] top-3 left-3 rounded-lg border border-neutral-300 bg-white text-neutral-900 px-3 py-1.5 shadow text-sm"
+        className="fixed z-[80] top-14 left-3 rounded-lg border border-neutral-300 bg-white text-neutral-900 px-3 py-1.5 shadow text-sm"
         title={editing ? "Quit editing mode" : "Enter editing mode"}
       >
         {editing ? "Quit editing mode" : "Enter editing mode"}

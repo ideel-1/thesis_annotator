@@ -277,16 +277,21 @@ function BoardSurface({ token, canEdit }: BoardOverlayProps) {
             >
               {r.collapsed ? (
                 <button
-                  onClick={(e) => {
+                    onClick={(e) => {
                     e.stopPropagation();
                     toggleCollapse(k);
-                  }}
-                  className="rounded-full border border-neutral-300 bg-white shadow px-3 py-1 text-xs"
-                  title={LABELS[k]}
+                    }}
+                    className="rounded-full border border-neutral-300 bg-white shadow px-4 pt-1.5 pb-1 text-md text-neutral-800 font-semibold"
+                    title={LABELS[k]}
                 >
-                  {LABELS[k].split(" ")[0]}
+                    {LABELS[k]
+                    .replace(/^Design\s+as\s+/i, "")       // remove “Design as …”
+                    .replace(/^Design\s+/i, "")            // or just “Design ”
+                    .replace(/&/g, "and")                 // optional readability tweak
+                    .split(" ")[0]                        // keep short keyword if long
+                    .slice(0, 20)}                       
                 </button>
-              ) : (
+                ) : (
                 <div className="w-[360px] max-w-[84vw] rounded-xl border border-neutral-200 bg-white shadow p-4">
                   <div className="flex items-start justify-between gap-3">
                     <h4 className="font-semibold text-neutral-900">{LABELS[k]}</h4>
