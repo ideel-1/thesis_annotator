@@ -20,6 +20,7 @@ type Comment = {
 
 type CommentOverlayProps = {
   reviewerLabel?: string; // e.g. "INT4"
+  token: string;
 };
 
 const clamp = (v: number) => Math.max(0, Math.min(100, v));
@@ -38,7 +39,7 @@ function useAutosizeTextArea<T extends HTMLTextAreaElement>() {
 /*                            Component main body                              */
 /* -------------------------------------------------------------------------- */
 
-export default function CommentOverlay({ reviewerLabel }: CommentOverlayProps) {
+export default function CommentOverlay({ reviewerLabel, token }: CommentOverlayProps) {
   const layerRef = useRef<HTMLDivElement>(null);
   const draftInputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -61,47 +62,23 @@ export default function CommentOverlay({ reviewerLabel }: CommentOverlayProps) {
   const [savedAt, setSavedAt] = useState<Record<string, number>>({});
   const saveTimers = useRef<Record<string, number | NodeJS.Timeout>>({});
 
-  // Latest comments ref for debounced saves
-  const commentsRef = useRef<Comment[]>([]);
   useEffect(() => {
-    commentsRef.current = comments;
-  }, [comments]);
-
-  const storeKey = useMemo(() => (code ? `thesis-comments-${code}` : null), [code]);
-
-  /* --------------------------- reviewer initialization --------------------------- */
-
-  useEffect(() => {
-    if (!reviewerLabel) {
-      setCode("guest"); // Public (no token) = read-only guest
-      return;
-    }
-    setCode(reviewerLabel);
-    const welcomeKey = `welcome-shown-${reviewerLabel}`;
-    if (!localStorage.getItem(welcomeKey)) {
-      setToast(
-        `Welcome. Your comments will be stored under your reviewer ID (${reviewerLabel}). Your notes are visible to the author; not to other reviewers.`
-      );
-      localStorage.setItem(welcomeKey, "1");
-      setTimeout(() => setToast(null), 4200);
-    }
+    if (!reviewerLabel) setCode("guest");
+    else setCode(reviewerLabel);
   }, [reviewerLabel]);
 
-  /* --------------------------------- loading ---------------------------------- */
-
-  // Load from Supabase (for this reviewer)
+  // Load comments through RPC
   useEffect(() => {
-    if (!code) return;
+    if (!token) return;
     (async () => {
-      const { data } = await supabase
-        .from("comments")
-        .select("*")
-        .eq("reviewer_code", code)
-        .order("num", { ascending: true });
-
+      const { data, error } = await supabase.rpc("comments_list", { p_token: token });
+      if (error) {
+        console.error("comments_list error", error);
+        return;
+      }
       if (data) {
         setComments(
-          data.map((d) => ({
+          data.map((d: any) => ({
             id: d.id,
             num: d.num,
             xPct: d.x_pct,
@@ -114,47 +91,79 @@ export default function CommentOverlay({ reviewerLabel }: CommentOverlayProps) {
         );
       }
     })();
-  }, [code]);
+  }, [token]);
 
-  /* ---------------------------- per-comment saving ----------------------------- */
+  async function upsertComment(c: Comment) {
+    const { data, error } = await supabase.rpc("comment_upsert", {
+      p_token: token,
+      p_id: c.id,
+      p_x_pct: c.xPct,
+      p_y_pct: c.yPct,
+      p_text: c.text,
+      p_collapsed: c.collapsed,
+      p_num: c.num,
+    });
+    if (error) throw error;
+    return data;
+  }
 
-  // reason: "text" | "position" | "collapse"
+  async function upsertExisting(c: Comment) {
+    const { data, error } = await supabase.rpc("comment_upsert", {
+      p_token: token,
+      p_id: c.id,                 // UPDATE path (existing row)
+      p_x_pct: c.xPct,
+      p_y_pct: c.yPct,
+      p_text: c.text,
+      p_collapsed: c.collapsed,
+      p_num: c.num,
+    });
+    if (error) throw error;
+    return data;
+  }
+
+  async function insertNew(c: Comment) {
+    const { data, error } = await supabase.rpc("comment_upsert", {
+      p_token: token,
+      p_id: null,                 // INSERT path (new row)
+      p_x_pct: c.xPct,
+      p_y_pct: c.yPct,
+      p_text: c.text,
+      p_collapsed: c.collapsed,
+      p_num: c.num,               // client-suggested num; server enforces uniqueness
+    });
+    if (error) throw error;
+    return data;                  // server row with real id/num/timestamps
+  }
+
+  async function updateExisting(c: Comment) {
+    const { data, error } = await supabase.rpc("comment_upsert", {
+      p_token: token,
+      p_id: c.id,                 // UPDATE branch
+      p_x_pct: c.xPct,
+      p_y_pct: c.yPct,
+      p_text: c.text,
+      p_collapsed: c.collapsed,
+      p_num: c.num,
+    });
+    if (error) throw error;
+    return data;
+  }
+
   function queueSave(id: string, reason: "text" | "position" | "collapse") {
-    // clear existing timer
     const t = saveTimers.current[id];
     if (t) clearTimeout(t as number);
-
-    // Only show “Saving…” for text edits
-    if (reason === "text") {
-      setSavingTextIds((prev) => new Set(prev).add(id));
-    }
-
+    if (reason === "text") setSavingTextIds((prev) => new Set(prev).add(id));
+  
     saveTimers.current[id] = setTimeout(async () => {
-      const item = commentsRef.current.find((c) => c.id === id);
-      if (!item || !code) {
-        if (reason === "text") {
-          setSavingTextIds((prev) => {
-            const next = new Set(prev);
-            next.delete(id);
-            return next;
-          });
-        }
-        return;
-      }
-
+      const item = comments.find((c) => c.id === id);
+      if (!item) return;
       try {
-        await supabase.from("comments").upsert({
-          id: item.id,
-          reviewer_code: code,
-          num: item.num,
-          x_pct: item.xPct,
-          y_pct: item.yPct,
-          text: item.text,
-          collapsed: item.collapsed,
-          created_at: new Date(item.createdAt).toISOString(),
-          updated_at: new Date(item.updatedAt).toISOString(),
-        });
-        setSavedAt((prev) => ({ ...prev, [id]: Date.now() }));
+        await updateExisting(item);             // UPDATE path
+        setSavedAt((s) => ({ ...s, [id]: Date.now() }));
+      } catch (e) {
+        console.error("save failed:", e);
+        setToast("Save failed");
+        setTimeout(() => setToast(null), 2000);
       } finally {
         if (reason === "text") {
           setSavingTextIds((prev) => {
@@ -165,99 +174,79 @@ export default function CommentOverlay({ reviewerLabel }: CommentOverlayProps) {
         }
         delete saveTimers.current[id];
       }
-    }, 400); // debounce per id
+    }, 400);
   }
-
-  /* ------------------------------ draft autofocus ------------------------------ */
-
-  useEffect(() => {
-    if (!draft) return;
-    requestAnimationFrame(() => {
-      const el = draftInputRef.current;
-      if (el) {
-        el.focus();
-        el.style.height = "auto";
-        el.style.height = el.scrollHeight + "px";
-      }
-    });
-  }, [draft]);
-
-  /* ------------------------- right-click to place draft ------------------------ */
-
-  useEffect(() => {
-    if (!editing) return;
-
-    function onCtx(e: MouseEvent) {
-      const target = e.target as HTMLElement | null;
-      if (target && target.closest("[data-comment-box]")) return;
-
-      e.preventDefault();
-
-      const el = layerRef.current;
-      if (!el) return;
-
-      const rect = el.getBoundingClientRect();
-      const xPct = ((e.clientX - rect.left) / rect.width) * 100;
-      const yPct = ((e.clientY - rect.top) / rect.height) * 100;
-
-      setDraft({
-        xPct: Math.max(0, Math.min(100, xPct)),
-        yPct: Math.max(0, Math.min(100, yPct)),
-        text: "",
-      });
-    }
-
-    window.addEventListener("contextmenu", onCtx, { capture: true });
-    return () => window.removeEventListener("contextmenu", onCtx, { capture: true } as any);
-  }, [editing]);
-
-  /* ------------------------------- add comments ------------------------------- */
+  
 
   const getNextNum = (list: Comment[]) => list.reduce((m, c) => Math.max(m, c.num || 0), 0) + 1;
 
   const saveDraft = useCallback(() => {
     if (!draft) return;
-    const newId = crypto.randomUUID();
-    setComments((prev) => {
-      const c: Comment = {
-        id: newId,
-        num: getNextNum(prev),
-        xPct: draft.xPct,
-        yPct: draft.yPct,
-        text: draft.text.trim(),
-        collapsed: false,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-      return [...prev, c];
-    });
+    const tempId = crypto.randomUUID();
+  
+    const temp: Comment = {
+      id: tempId,                     // local temp until server returns real row
+      num: getNextNum(comments),
+      xPct: draft.xPct,
+      yPct: draft.yPct,
+      text: draft.text.trim(),
+      collapsed: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+  
+    setComments((prev) => [...prev, temp]);
     setDraft(null);
     setToast("Comment saved");
     setTimeout(() => setToast(null), 2000);
-    queueSave(newId, "text"); // initial save counts as text edit
-  }, [draft]);
+  
+    (async () => {
+      try {
+        const saved = await insertNew(temp);   // INSERT (p_id=null)
+        setComments((prev) =>
+          prev.map((c) =>
+            c.id === tempId
+              ? {
+                  ...c,
+                  id: saved.id,                 // replace temp id with server id
+                  num: saved.num,
+                  createdAt: new Date(saved.created_at).getTime(),
+                  updatedAt: new Date(saved.updated_at).getTime(),
+                }
+              : c
+          )
+        );
+        setSavedAt((s) => ({ ...s, [saved.id]: Date.now() }));
+      } catch (e) {
+        console.error("insert failed:", e);
+        setToast("Error saving");
+        setTimeout(() => setToast(null), 2000);
+      }
+    })();
+  }, [draft, comments, token]);
 
-  const createEmptyBox = useCallback(() => {
-    if (!draft) return;
-    const newId = crypto.randomUUID();
-    setComments((prev) => {
-      const c: Comment = {
-        id: newId,
-        num: getNextNum(prev),
-        xPct: draft.xPct,
-        yPct: draft.yPct,
-        text: "",
-        collapsed: false,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-      return [...prev, c];
-    });
-    setDraft(null);
-    queueSave(newId, "position");
-  }, [draft]);
+  // Right-click to draft
+  useEffect(() => {
+    if (!editing) return;
+    function onCtx(e: MouseEvent) {
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest("[data-comment-box]")) return;
+      e.preventDefault();
+      const el = layerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+      const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+      setDraft({ xPct: clamp(xPct), yPct: clamp(yPct), text: "" });
+    }
+    window.addEventListener("contextmenu", onCtx, { capture: true });
+    return () => window.removeEventListener("contextmenu", onCtx, { capture: true } as any);
+  }, [editing]);
 
-  /* --------------------------------- editing --------------------------------- */
+  const doDelete = async (id: string) => {
+    const { error } = await supabase.rpc("comment_delete", { p_token: token, p_id: id });
+    if (error) throw error;
+  };
 
   function startDrag(e: React.PointerEvent, id: string) {
     if (!editing) return;
@@ -269,7 +258,6 @@ export default function CommentOverlay({ reviewerLabel }: CommentOverlayProps) {
     const startY = e.clientY;
     const current = comments.find((c) => c.id === id);
     if (!current) return;
-
     const onMove = (ev: PointerEvent) => {
       const dx = ev.clientX - startX;
       const dy = ev.clientY - startY;
@@ -280,7 +268,7 @@ export default function CommentOverlay({ reviewerLabel }: CommentOverlayProps) {
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
-      queueSave(id, "position"); // save when drag ends
+      queueSave(id, "position");
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -295,15 +283,12 @@ export default function CommentOverlay({ reviewerLabel }: CommentOverlayProps) {
   const toggleCollapse = (id: string) => {
     if (!editing) return;
     setComments((cs) => cs.map((c) => (c.id === id ? { ...c, collapsed: !c.collapsed, updatedAt: Date.now() } : c)));
-    queueSave(id, "collapse"); // persist collapse, but won’t show “Saving…”
+    queueSave(id, "collapse");
   };
+  
 
-  const deleteComment = async (id: string) => {
-    if (!editing) return;
-    const c = comments.find((cm) => cm.id === id);
-    if (!c) return;
-    setDeleteTarget(id); // open modal; actual delete in modal button
-  };
+
+
 
   /* ---------------------------------- render --------------------------------- */
 
@@ -386,7 +371,7 @@ export default function CommentOverlay({ reviewerLabel }: CommentOverlayProps) {
           editing={editing}
           onStartDrag={startDrag}
           onToggle={() => toggleCollapse(c.id)}
-          onDelete={() => deleteComment(c.id)}
+          onDelete={() => setDeleteTarget(c.id)}
           onText={(t) => updateText(c.id, t)}
           isSavingText={savingTextIds.has(c.id)}
           savedAt={savedAt[c.id] ?? null}
@@ -410,11 +395,18 @@ export default function CommentOverlay({ reviewerLabel }: CommentOverlayProps) {
                 onClick={async () => {
                   if (!deleteTarget) return;
                   try {
-                    await supabase.from("comments").delete().eq("id", deleteTarget);
+                    // RLS-safe delete via function
+                    const { error } = await supabase.rpc("comment_delete", {
+                      p_token: token,
+                      p_id: deleteTarget,
+                    });
+                    if (error) throw error;
+
                     setComments((cs) => cs.filter((c) => c.id !== deleteTarget));
                     setToast("Comment deleted");
                     setTimeout(() => setToast(null), 1500);
                   } catch (err) {
+                    // eslint-disable-next-line no-console
                     console.error("Delete failed", err);
                     setToast("Error deleting comment");
                     setTimeout(() => setToast(null), 2000);

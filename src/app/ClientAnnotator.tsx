@@ -6,6 +6,8 @@ import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import CommentOverlay from "@/components/CommentOverlay";
 import OwnerPanel from "@/components/OwnerPanel";
+import BoardOverlay from "@/components/BoardOverlay";
+
 
 type ReviewerStatus =
   | { state: "idle" }
@@ -21,9 +23,9 @@ function InstructionCard() {
         <div className="p-6 md:p-8">
           <div className="flex items-center gap-3 mb-3">
             <img src="/icons/info-icon.svg" alt="How to review" className="w-4 h-4 opacity-90" />
-            <h2 className="text-base md:text-lg font-semibold text-neutral-900">How to review this document</h2>
+            <h2 className="text-lg font-medium text-neutral-900">How to add to this page</h2>
           </div>
-          <div className="space-y-3 text-[15px] leading-7 text-neutral-800">
+          <div className="space-y-3 text-[16px] leading-7 font-normal text-neutral-800">
             <p>
               This page is interactive. Leave comments directly on the content:
               <strong> right-click anywhere</strong> to create a comment box. Drag to reposition, collapse to minimize,
@@ -45,6 +47,11 @@ export default function ClientAnnotator() {
   const tokenRaw = params.get("token");
   const [reviewer, setReviewer] = useState<ReviewerStatus>({ state: tokenRaw ? "loading" : "idle" });
   const [mountEl, setMountEl] = useState<HTMLElement | null>(null);
+  
+  const [boardMount, setBoardMount] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setBoardMount(document.getElementById("board-mount"));
+  }, []);
 
   // mount point for instructions card
   useEffect(() => {
@@ -113,7 +120,16 @@ export default function ClientAnnotator() {
     <>
       <Banner />
       {commentingEnabled && mountEl ? createPortal(<InstructionCard />, mountEl) : null}
-      {commentingEnabled ? <CommentOverlay reviewerLabel={reviewer.label} /> : null}
+
+      {/* New: Board (edit if token & canComment; otherwise read-only) */}
+        {boardMount
+      ? createPortal(
+          <BoardOverlay token={tokenRaw} canEdit={reviewer.state === "valid" && reviewer.canComment} />,
+          boardMount
+      ) : null}
+
+      {commentingEnabled ? 
+        <CommentOverlay reviewerLabel={reviewer.label} token={tokenRaw!}/> : null}
       <OwnerPanel />
     </>
   );

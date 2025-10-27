@@ -135,11 +135,17 @@ export default function Page() {
       </nav>
 
       {/* ------------------------ OVERVIEW ------------------------ */}
-      <section id="overview" className="mx-auto max-w-6xl px-6 pt-24 pb-32">
-        <h1 className="text-3xl md:text-5xl font-semibold tracking-tight mb-10 text-center">
+      <section id="overview" className="mx-auto max-w-6xl px-6 pt-24 pb-32" >
+        <h1 className="text-4xl font-semibold tracking-tight mb-10 text-center">
           Master Thesis: defining the value argument for design
         </h1>
-        
+
+        {/* Mount point for reviewer instructions */}
+        <div
+          id="reviewer-instructions-mount"
+          className="max-w-3xl mx-auto mb-12"
+        />
+
         {/* After the instruction card */}
       <div className="relative max-w-6xl mx-auto px-6 mt-20 mb-10">
         <div className="h-px w-full bg-gradient-to-r from-transparent via-neutral-200 to-transparent" />
@@ -148,7 +154,7 @@ export default function Page() {
         </span>
       </div>
         <div className="max-w-3xl mx-auto bg-white border border-neutral-200 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.06)] p-8 mb-20">
-          <h2 className="text-lg font-semibold text-neutral-900 mb-4">
+          <h2 className="text-xl font-medium text-neutral-900 mb-4">
             Throughline
           </h2>
           <p className="text-neutral-700 text-lg leading-[1.85] tracking-[0.01em]">
@@ -223,10 +229,10 @@ export default function Page() {
       <section id="context" className="relative mx-auto max-w-6xl px-6 pb-28">
         {/* Title & subtitle */}
         <div className="text-center max-w-4xl mx-auto mb-16">
-          <h2 className="text-7xl font-semibold text-neutral-900 mb-16">
-            Organizational context
+          <h2 className="text-4xl font-semibold text-neutral-900 mb-16">
+            1. Organizational context
           </h2>
-          <p className="text-left text-neutral-600 leading-[1.85] tracking-[0.01em] text-2xl">
+          <p className="text-left text-neutral-600 leading-[1.85] tracking-[0.01em] text-xl">
             In this chapter, I explain the context of advocacy: why it happens
             in the first place, and within what circumstances.
             <br />
@@ -252,7 +258,7 @@ export default function Page() {
 
         {/* Flow line */}
         <FlowSVG
-          className="top-[450px] w-[900px] h-[2300px]"
+          className="top-[250px] w-[900px] h-[2300px]"
           viewBoxHeight={2300}
           pathD={`M450 400
                    C400 480, 300 600, 430 850
@@ -314,11 +320,11 @@ export default function Page() {
 </div>
 
         {/* Handoff to Content */}
-        <div className="text-center max-w-4xl mx-auto mt-10">
-          <p className="text-left text-neutral-600 leading-[1.85] tracking-[0.01em] text-3xl">
+        <div className="text-center max-w-4xl mx-auto mt-40">
+          <p className="text-left text-neutral-600 leading-[1.85] tracking-[0.01em] text-xl">
             Having understood some of the why and in what context design
             advocacy happens, we turn to the core value arguments which design
-            leaders use.
+            leaders use:
           </p>
         </div>
       </section>
@@ -327,10 +333,10 @@ export default function Page() {
       <section id="what" className="relative mx-auto max-w-6xl px-6 pb-28">
         {/* Title and subtitle (your adjusted copy) */}
         <div className="text-center max-w-4xl mx-auto mb-16">
-          <h2 className="text-7xl font-semibold text-neutral-900 mb-16">
-            Advocacy content
+          <h2 className="text-4xl font-semibold text-neutral-900 mb-16">
+            2. Advocacy content
           </h2>
-          <p className="text-left text-neutral-600 leading-[1.85] tracking-[0.01em] text-2xl">
+          <p className="text-left text-neutral-800 leading-[1.85] tracking-[0.01em] text-xl">
             The “what” of advocacy is a portfolio of lenses that can be
             recombined: customer connection, integration/efficiency,
             differentiation/quality, and strategic lensing.
@@ -347,118 +353,27 @@ export default function Page() {
             framed as option creation and foresight.
             <br />
             <br />
-            In this chapter, I will highlight some things you mentioned, you can
-            comment on those as well.
+            <strong>The following board represents how much different lenses
+              appear inside the interviews. Please drag and drop, and add comments if 
+              you feel like the board should be organized in a different way.
+            </strong>
           </p>
         </div>
+        {/* Chapter 2 — Draggable Board */}
+        <div id="board-mount" className="max-w-5xl mx-auto px-2 mt-6" />
 
-        {/* Throughline for 4 items; ends before themes */}
-        <FlowSVG
-          className="top-[350px] w-[900px] h-[2200px]"
-          viewBoxHeight={2200}
-          pathD={`M450 400 
-                   C400 450, 350 500, 450 750 
-                   C550 1000, 250 1250, 400 1500 
-                   C550 1750, 250 2000, 400 2150`}
-        />
 
-<div className="relative min-h-[450px] flex items-center">
-  <Card side="left" title="Design as Connection to Customer">
-    <BulletList
-      items={[
-        "Design positions itself as the organization’s voice of the customer.",
-        "Research, journey maps, and direct user exposure correct internal bias and de-risk bets.",
-        "Leaders gain confidence they are doing the right thing for customers and the business."
-      ]}
-    />
-  </Card>
-</div>
-
-<div className="relative min-h-[450px] flex items-center">
-  <Card side="right" title="Design as Integrator and Efficiency Enabler">
-    <BulletList
-      items={[
-        "Design acts as the glue bridging silos and aligning product, engineering, and business.",
-        "Early testing and prototyping prevent rework, saving time and money.",
-        "The claim resonates with stakeholders focused on speed, ROI, and execution risk."
-      ]}
-    />
-  </Card>
-</div>
-
-<div className="relative min-h-[450px] flex items-center">
-  <Card side="left" width="w-[450px]" title="Design as Differentiator and Quality Standard">
-    <BulletList
-      items={[
-        "Design elevates experience quality and brand trust when features converge.",
-        "Consistency in high quality contributes to market-relevant outcomes.",
-        "Some contexts avoid this lens when markets are less competitive, companies are more mature, or to avoid reducing design to aesthetics."
-      ]}
-    />
-  </Card>
-</div>
-
-<div className="relative min-h-[450px] flex items-center">
-  <Card side="right" title="Design as Strategic Lens and Vision Caster">
-    <BulletList
-      items={[
-        "With credibility, design contributes to upstream framing and futures work.",
-        "Rapid prototyping informs strategy and option creation.",
-        "This typically happens in more mature contexts after prior wins earn strategic access."
-      ]}
-    />
-  </Card>
-</div>
-
-        <div className="text-center max-w-4xl mx-auto mb-16">
-          <p className="text-left text-neutral-600 leading-[1.85] tracking-[0.01em] text-3xl">
-            The following aspects help support the four core lenses, but are
-            cited less often:
-          </p>
-        </div>
-
-        {/* supporting themes (no line here) */}
-        <div className="grid grid-cols-3 gap-8 max-w-5xl mx-auto text-left">
-          <div className="reveal p-6 rounded-xl bg-white/90 ring-1 ring-black/5 shadow-[0_8px_30px_rgba(0,0,0,0.06)]">
-            <h5 className="font-semibold text-lg mb-3">
-              Consistency through Design Systems
-            </h5>
-            <p className="text-sm text-neutral-700 leading-[1.85] tracking-[0.01em]">
-              Shared standards and systems create coherence at scale, reduce
-              ambiguity, and compound trust over time - often becoming a subtle,
-              durable differentiator.
-            </p>
-          </div>
-          <div className="reveal p-6 rounded-xl bg-white/90 ring-1 ring-black/5 shadow-[0_8px_30px_rgba(0,0,0,0.06)]">
-            <h5 className="font-semibold text-lg mb-3">
-              Culture Change and Evangelism
-            </h5>
-            <p className="text-sm text-neutral-700 leading-[1.85] tracking-[0.01em]">
-              Design talks, internal cases, and applying design to internal
-              processes keep practices from regressing amid turnover and legacy
-              habits.
-            </p>
-          </div>
-          <div className="reveal p-6 rounded-xl bg-white/90 ring-1 ring-black/5 shadow-[0_8px_30px_rgba(0,0,0,0.06)]">
-            <h5 className="font-semibold text-lg mb-3">
-              Creativity as a Sustaining Resource
-            </h5>
-            <p className="text-sm text-neutral-700 leading-[1.85] tracking-[0.01em]">
-              Some leaders emphasize designers’ unique capacity to envision
-              non-obvious possibilities, tying design to innovation.
-            </p>
-          </div>
-        </div>
+        
       </section>
 
       {/* ------------------------ COMMUNICATION ------------------------ */}
       <section id="how" className="relative mx-auto max-w-6xl px-6 pb-28">
         {/* Title + subtitle */}
         <div className="text-center max-w-4xl mx-auto mb-16">
-          <h2 className="text-7xl font-semibold text-neutral-900 mb-16">
+          <h2 className="text-4xl font-semibold text-neutral-900 mb-16 mt-20">
             Communication tactics
           </h2>
-          <p className="text-left text-neutral-600 leading-[1.85] tracking-[0.01em] text-2xl">
+          <p className="text-left text-neutral-600 leading-[1.85] tracking-[0.01em] text-xl">
             Persuasion rests on executional communication: “the how” of
             advocacy.
             <br />
@@ -564,8 +479,8 @@ export default function Page() {
 
         {/* Synthesis (no line here) */}
         <div className="text-center max-w-4xl mx-auto mt-10">
-          <h4 className="italic text-2xl text-neutral-800 mb-6">Synthesis</h4>
-          <p className="text-left text-neutral-600 leading-[1.85] tracking-[0.01em] text-2xl">
+          <h4 className="italic text-4xl font-medium text-neutral-800 mb-16">Synthesis</h4>
+          <p className="text-left text-neutral-800 leading-[1.85] tracking-[0.01em] text-xl">
             For design leaders, advocacy is a system with three responsibilities.
             <br />
             <br />
@@ -597,7 +512,7 @@ export default function Page() {
 
       {/* Footer */}
       <footer className="mx-auto max-w-5xl px-6 pb-12 text-xs text-neutral-500 text-center">
-        © {new Date().getFullYear()} — Thesis findings
+        © {new Date().getFullYear()} - Thesis findings; Radovan Lamac
       </footer>
 
       
