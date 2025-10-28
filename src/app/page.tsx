@@ -150,12 +150,6 @@ export default function Page() {
         />
 
         {/* After the instruction card */}
-      <div className="relative max-w-6xl mx-auto px-6 mt-20 mb-10">
-        <div className="h-px w-full bg-gradient-to-r from-transparent via-neutral-200 to-transparent" />
-        <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-white px-3 text-xs tracking-wide text-neutral-600">
-          Content begins below
-        </span>
-      </div>
         <div className="max-w-3xl mx-auto bg-white border border-neutral-200 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.06)] p-8 mb-20">
           <h2 className="text-xl font-medium text-neutral-900 mb-4">
             Throughline
@@ -327,7 +321,7 @@ export default function Page() {
 </div>
 
         {/* Handoff to Content */}
-        <div className="text-center max-w-4xl mx-auto mt-40">
+        <div className="text-center max-w-4xl mx-auto mt-16">
           <p className="text-left text-neutral-600 leading-[1.85] tracking-[0.01em] text-xl">
             Having understood some of the why and in what context design
             advocacy happens, we turn to the core value arguments which design

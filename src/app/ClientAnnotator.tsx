@@ -8,7 +8,7 @@ import CommentOverlay from "@/components/CommentOverlay";
 import OwnerPanel from "@/components/OwnerPanel";
 import BoardOverlay from "@/components/BoardOverlay";
 import ReviewerNotes from "@/components/ReviewerNotes";
-
+import OnboardingModal from "@/components/OnboardingModal";
 
 
 type ReviewerStatus =
@@ -17,49 +17,20 @@ type ReviewerStatus =
   | { state: "valid"; label: string; canComment: boolean }
   | { state: "invalid" };
 
-function InstructionCard() {
-  return (
-    <div className="max-w-3xl mx-auto mb-10">
-      <div className="relative overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[0_20px_60px_-20px_rgba(16,185,129,0.45),0_10px_30px_-10px_rgba(0,0,0,0.08)]">
-        <span className="absolute left-0 top-0 h-full w-1.5 bg-emerald-400/80" />
-        <div className="p-6 md:p-8">
-          <div className="flex items-center gap-3 mb-3">
-            <img src="/icons/info-icon.svg" alt="How to review" className="w-4 h-4 opacity-90" />
-            <h2 className="text-lg font-medium text-neutral-900">How to add to this page</h2>
-          </div>
-          <div className="space-y-3 text-[16px] leading-7 font-normal text-neutral-800">
-            <p>
-              This page is interactive. Leave comments directly on the content:
-              <strong> right-click anywhere</strong> to create a comment box. Drag to reposition, collapse to minimize,
-              or delete from the box controls.
-            </p>
-            <p>
-              Your notes are <strong>linked to your reviewer token</strong> and are visible only to you and the author.
-              Use the toggle in the top-left to switch between editing and reading modes.
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+
 
 export default function ClientAnnotator() {
   const params = useSearchParams();
   const tokenRaw = params.get("token");
   const [reviewer, setReviewer] = useState<ReviewerStatus>({ state: tokenRaw ? "loading" : "idle" });
-  const [mountEl, setMountEl] = useState<HTMLElement | null>(null);
   const notesVisible = reviewer.state === "valid";
+  const [showHelp, setShowHelp] = useState(false);
   
   const [boardMount, setBoardMount] = useState<HTMLElement | null>(null);
   useEffect(() => {
     setBoardMount(document.getElementById("board-mount"));
   }, []);
 
-  // mount point for instructions card
-  useEffect(() => {
-    setMountEl(document.getElementById("reviewer-instructions-mount"));
-  }, []);
 
   // validate token
   useEffect(() => {
@@ -106,6 +77,22 @@ export default function ClientAnnotator() {
     reveals.forEach((el) => io.observe(el));
     return () => io.disconnect();
   }, []);
+
+  // When reviewer becomes valid, open modal if not seen for this label
+  useEffect(() => {
+    if (reviewer.state !== "valid") return;
+    const k = `annotator:onboarding:v1:${reviewer.label}`;
+    const seen = typeof window !== "undefined" ? localStorage.getItem(k) : "seen";
+    if (!seen) setShowHelp(true);
+  }, [reviewer]);
+
+  const markSeenAndClose = () => {
+    if (reviewer.state === "valid") {
+      const k = `annotator:onboarding:v1:${reviewer.label}`;
+      localStorage.setItem(k, "seen");
+    }
+    setShowHelp(false);
+  };
 
   function useFlowOffset({
     sectionId,
@@ -176,30 +163,119 @@ export default function ClientAnnotator() {
     deps: [notesVisible],
   });
 
-  const Banner = () => {
+  function Banner({
+    reviewer,
+    token,
+    onOpenHelp,
+  }: {
+    reviewer: ReviewerStatus;
+    token: string | null;
+    onOpenHelp: () => void;
+  }) {
+    const [complete, setComplete] = useState<boolean | null>(null);
+    const canEdit = reviewer.state === "valid" && reviewer.canComment;
+  
+    // Fetch current completion
+    useEffect(() => {
+      if (!token || reviewer.state !== "valid") return;
+      (async () => {
+        const { data, error } = await supabase.rpc("review_complete_get", { p_token: token });
+        if (error) {
+          console.error("review_complete_get error:", error);
+          return;
+        }
+        setComplete(data?.[0]?.review_complete ?? false);
+      })();
+    }, [token, reviewer]);
+  
+    // Toggle handler
+    const toggle = async () => {
+      if (!token || reviewer.state !== "valid") return;
+      const newVal = !complete;
+      setComplete(newVal);
+      const { error } = await supabase.rpc("review_complete_toggle", {
+        p_token: token,
+        p_value: newVal,
+      });
+      if (error) console.error("review_complete_toggle error:", error);
+    };
+  
+    // Loading state
     if (reviewer.state === "loading")
-      return <div className="fixed top-0 inset-x-0 z-40 bg-neutral-900 text-white text-center py-2 text-sm">Validating reviewer link…</div>;
-    if (reviewer.state === "valid")
-      return reviewer.canComment ? (
-        <div className="fixed top-0 inset-x-0 z-40 bg-emerald-600 text-white text-center py-2 text-sm">
-          Reviewer {reviewer.label} — commenting enabled
-        </div>
-      ) : (
-        <div className="fixed top-0 inset-x-0 z-40 bg-amber-500 text-black text-center py-2 text-sm">
-          Reviewer {reviewer.label} — view-only (commenting disabled)
+      return (
+        <div className="fixed top-0 inset-x-0 z-40 bg-neutral-900 text-white text-center py-2 text-sm">
+          Validating reviewer link…
         </div>
       );
+  
+    // Invalid or public view
     if (reviewer.state === "invalid")
-      return <div className="fixed top-0 inset-x-0 z-40 bg-red-600 text-white text-center py-2 text-sm">Invalid or expired link — view-only</div>;
-    return <div className="fixed top-0 inset-x-0 z-40 bg-neutral-100 text-neutral-700 text-center py-2 text-sm">Public view — comments disabled</div>;
-  };
+      return (
+        <div className="fixed top-0 inset-x-0 z-40 bg-red-600 text-white text-center py-2 text-sm">
+          Invalid or expired link — view-only
+        </div>
+      );
+    if (reviewer.state === "idle")
+      return (
+        <div className="fixed top-0 inset-x-0 z-40 bg-neutral-100 text-neutral-700 text-center py-2 text-sm">
+          Public view — comments disabled
+        </div>
+      );
+  
+    // Reviewer valid
+    return (
+      <div
+        className={`fixed top-0 inset-x-0 z-40 flex items-center justify-center gap-4 py-3 text-sm ${
+          canEdit ? "bg-emerald-600 text-white" : "bg-amber-500 text-black"
+        }`}
+      >
+        <span>
+          Reviewer <strong>{reviewer.label}</strong> - {" "}
+          {canEdit ? "commenting enabled" : "view-only (commenting disabled)"}
+        </span>
+  
+        {canEdit && (
+          <label className="flex items-center gap-1 cursor-pointer select-none text-sm font-normal pl-30 pr-30">
+            <span>Review Completed? </span>
+            <input
+              type="checkbox"
+              className="w-4 h-4 rounded cursor-pointer border border-white/60 bg-white/20 accent-white"
+              checked={!!complete}
+              onChange={toggle}
+            />
+          </label>
+        )}
+  
+        {canEdit && (
+          <button
+            onClick={onOpenHelp}
+            className="flex items-center cursor-pointer gap-1 text-sm font-normal rounded-md border border-white/40 bg-white/20 px-2 py-0.5 hover:bg-white/30"
+            title="How to add comments"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="w-3.5 h-3.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M9.09 9a3 3 0 115.82 1c0 2-3 2-3 4" />
+              <path d="M12 17h.01" />
+              <circle cx="12" cy="12" r="10" />
+            </svg>
+            Help
+          </button>
+        )}
+      </div>
+    );
+  }
+  
 
   const commentingEnabled = reviewer.state === "valid" && reviewer.canComment;
 
   return (
     <>
-      <Banner />
-      {commentingEnabled && mountEl ? createPortal(<InstructionCard />, mountEl) : null}
+      <Banner reviewer={reviewer} token={tokenRaw} onOpenHelp={() => setShowHelp(true)} />
 
       {/* New: Board (edit if token & canComment; otherwise read-only) */}
         {boardMount
@@ -214,6 +290,57 @@ export default function ClientAnnotator() {
       {commentingEnabled ? 
         <CommentOverlay reviewerLabel={reviewer.label} token={tokenRaw!}/> : null}
       <OwnerPanel />
+
+      {/* Floating help button to reopen */}
+      <button
+        onClick={() => setShowHelp(true)}
+        className="fixed z-[60] bottom-4 left-4 rounded-full border border-neutral-300 bg-white/90 backdrop-blur px-3 py-2 shadow hover:bg-white"
+        title="How to add to this page"
+        aria-label="Open help"
+      >
+        <span className="inline-flex items-center gap-2 text-sm">
+          <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M9.09 9a3 3 0 115.82 1c0 2-3 2-3 4" />
+            <path d="M12 17h.01" />
+            <circle cx="12" cy="12" r="10" />
+          </svg>
+          Help
+        </span>
+      </button>
+
+      {/* Onboarding modal with embedded video + quick tips */}
+      <OnboardingModal open={showHelp} onClose={markSeenAndClose} title="How to add comments">
+        <div className="grid md:grid-cols-3 gap-6 items-start">
+          {/* Video */}
+          <div className="w-full col-span-2">
+            <video
+              className="w-full rounded-xl border border-neutral-200 shadow"
+              controls
+              playsInline
+              poster="/videos/annotator-intro-poster.jpg"
+            >
+              <source src="/videos/annotator-intro.webm" type="video/webm" />
+              <source src="/videos/annotator-intro.mp4" type="video/mp4" />
+              <track
+                kind="captions"
+                srcLang="en"
+                src="/videos/annotator-intro.vtt"
+                label="English"
+                default
+              />
+              Your browser does not support the video tag.
+            </video>
+          </div>
+          {/* Key steps */}
+          <div className="space-y-3 text-[16px] leading-7 text-neutral-800">
+            <p>This page is interactive. Leave comments directly on the content.</p>
+            <p><strong>Right-click</strong> anywhere to create a comment.</p>
+            <p><strong>Drag</strong> the comment to reposition; click the minus icon to <strong>collapse</strong>.</p>
+            <p>Edits auto-save. Use the top-left toggle to switch <strong>Edit / View</strong> mode.</p>
+            <p>Your notes are linked to your reviewer token and are visible only to you and the author.</p>
+          </div>
+        </div>
+      </OnboardingModal>
     </>
   );
   
