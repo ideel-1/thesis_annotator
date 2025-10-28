@@ -17,7 +17,58 @@ type ReviewerStatus =
   | { state: "valid"; label: string; canComment: boolean }
   | { state: "invalid" };
 
-
+  export function ReviewerCompleteToggle({
+    token,
+    canEdit,
+  }: {
+    token: string | null;
+    canEdit: boolean;
+  }) {
+    const [complete, setComplete] = useState<boolean | null>(null);
+  
+    // Fetch existing completion state on mount
+    useEffect(() => {
+      if (!token || !canEdit) return;
+      (async () => {
+        const { data, error } = await supabase.rpc("review_complete_get", { p_token: token });
+        if (error) {
+          console.error("review_complete_get error:", error);
+          return;
+        }
+        setComplete(data?.[0]?.review_complete ?? false);
+      })();
+    }, [token, canEdit]);
+  
+    // Handler to toggle and save
+    async function toggle() {
+      if (!token || !canEdit) return;
+      const newVal = !complete;
+      setComplete(newVal);
+      const { error } = await supabase.rpc("review_complete_toggle", {
+        p_token: token,
+        p_value: newVal,
+      });
+      if (error) {
+        console.error("review_complete_toggle error:", error);
+        // revert if failed
+        setComplete(!newVal);
+      }
+    }
+  
+    if (!canEdit) return null;
+  
+    return (
+      <label className="flex items-center gap-1 cursor-pointer select-none text-sm font-normal pl-20 pr-20">
+        <span>Mark as done</span>
+        <input
+          type="checkbox"
+          className="w-4 h-4 rounded cursor-pointer border border-white/60 bg-white/20 accent-white"
+          checked={!!complete}
+          onChange={toggle}
+        />
+      </label>
+    );
+  }
 
 export default function ClientAnnotator() {
   const params = useSearchParams();
@@ -233,24 +284,14 @@ export default function ClientAnnotator() {
           Reviewer <strong>{reviewer.label}</strong> - {" "}
           {canEdit ? "commenting enabled" : "view-only (commenting disabled)"}
         </span>
-  
-        {canEdit && (
-          <label className="flex items-center gap-1 cursor-pointer select-none text-sm font-normal pl-30 pr-30">
-            <span>Review Completed? </span>
-            <input
-              type="checkbox"
-              className="w-4 h-4 rounded cursor-pointer border border-white/60 bg-white/20 accent-white"
-              checked={!!complete}
-              onChange={toggle}
-            />
-          </label>
-        )}
-  
+
+        <ReviewerCompleteToggle token={token} canEdit={canEdit} />
+
         {canEdit && (
           <button
             onClick={onOpenHelp}
             className="flex items-center cursor-pointer gap-1 text-sm font-normal rounded-md border border-white/40 bg-white/20 px-2 py-0.5 hover:bg-white/30"
-            title="How to add comments"
+            title="How to work with this page:"
           >
             <svg
               viewBox="0 0 24 24"
@@ -309,7 +350,7 @@ export default function ClientAnnotator() {
       </button>
 
       {/* Onboarding modal with embedded video + quick tips */}
-      <OnboardingModal open={showHelp} onClose={markSeenAndClose} title="How to add comments">
+      <OnboardingModal open={showHelp} onClose={markSeenAndClose} title="How to add to this page:">
         <div className="grid md:grid-cols-3 gap-6 items-start">
           {/* Video */}
           <div className="w-full col-span-2">
