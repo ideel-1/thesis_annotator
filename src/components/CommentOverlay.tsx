@@ -520,7 +520,6 @@ function CommentBox({
               className={"w-full bg-transparent outline-none text-sm leading-snug resize-none " + (!editing ? "opacity-80" : "")}
               placeholder={editing ? "Write your note…" : ""}
               rows={1}
-              autoFocus={editing && !c.collapsed}
             />
 
             {/* footer */}

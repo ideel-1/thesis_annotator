@@ -368,7 +368,7 @@ export default function ClientAnnotator() {
     // Reviewer valid
     return (
       <div
-        className={`fixed top-0 inset-x-0 z-40 flex items-center justify-center gap-4 py-3 text-sm ${
+        className={`fixed top-0 inset-x-0 z-100 flex items-center justify-center gap-4 py-3 text-sm ${
           canEdit ? "bg-emerald-600 text-white" : "bg-amber-500 text-black"
         }`}
       >
@@ -396,7 +396,7 @@ export default function ClientAnnotator() {
               <path d="M12 17h.01" />
               <circle cx="12" cy="12" r="10" />
             </svg>
-            Help
+            Help :D
           </button>
         )}
       </div>
@@ -437,23 +437,6 @@ export default function ClientAnnotator() {
       {commentingEnabled ? 
         <CommentOverlay reviewerLabel={reviewer.label} token={token!}/> : null}
       <OwnerPanel />
-
-      {/* Floating help button to reopen */}
-      <button
-        onClick={() => setShowHelp(true)}
-        className="fixed z-[60] bottom-4 left-4 rounded-full border border-neutral-300 bg-white/90 backdrop-blur px-3 py-2 shadow hover:bg-white"
-        title="How to add to this page"
-        aria-label="Open help"
-      >
-        <span className="inline-flex items-center gap-2 text-sm">
-          <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M9.09 9a3 3 0 115.82 1c0 2-3 2-3 4" />
-            <path d="M12 17h.01" />
-            <circle cx="12" cy="12" r="10" />
-          </svg>
-          Help
-        </span>
-      </button>
 
       {/* Onboarding modal with embedded video + quick tips */}
       <OnboardingModal open={showHelp} onClose={markSeenAndClose} title="Welcome!">
