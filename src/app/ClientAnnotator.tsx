@@ -368,7 +368,7 @@ export default function ClientAnnotator() {
     // Reviewer valid
     return (
       <div
-        className={`fixed top-0 inset-x-0 z-100 flex items-center justify-center gap-4 py-3 text-sm ${
+        className={`fixed top-0 inset-x-0 z-1gi00 flex items-center justify-center gap-4 py-3 text-sm ${
           canEdit ? "bg-emerald-600 text-white" : "bg-amber-500 text-black"
         }`}
       >
@@ -396,7 +396,7 @@ export default function ClientAnnotator() {
               <path d="M12 17h.01" />
               <circle cx="12" cy="12" r="10" />
             </svg>
-            Help :D
+            Help
           </button>
         )}
       </div>
