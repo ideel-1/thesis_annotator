@@ -367,13 +367,13 @@ export default function ClientAnnotator() {
       {/* main single-column content */}
       <main className="relative mx-auto w-full px-6 pt-24 pb-32 text-neutral-900">
         {/* ------------------------ OVERVIEW ------------------------ */}
+        <h1 className="text-4xl font-semibold tracking-tight mb-16 text-center text-neutral-900">
+            Master Thesis: arguing for design in larger organizations
+          </h1>
         <section
           id="overview"
           className="mx-auto max-w-2xl w-full pb-16"
         >
-          <h1 className="text-4xl font-semibold tracking-tight mb-8 text-center text-neutral-900">
-            Master Thesis: defining the value argument for design
-          </h1>
   
           <div className="relative italic rounded-2xl border border-neutral-200 bg-emerald shadow-sm p-6 mb-12">
             {/* arrow */}
@@ -413,13 +413,13 @@ export default function ClientAnnotator() {
             </p>
           </div>
         </section>
-  
-        {/* ------------------------ CONTEXT ------------------------ */}
-        <section
-          id="context"
-          className="mx-auto max-w-2xl w-full pb-40"
-        >
-          <div className="mb-20">
+
+        {/* Divider */}
+        <div className="relative max-w-6xl mx-auto mt-24 mb-20">
+          <div className="h-px w-full bg-gradient-to-r from-transparent via-neutral-300 to-transparent" />
+        </div>
+
+        <div className="mx-auto max-w-2xl w-full">
           <h2 className="text-2xl font-semibold text-neutral-900 mb-4">
               Introduction
             </h2>
@@ -442,7 +442,7 @@ export default function ClientAnnotator() {
                 persuasive in the organization.
               </li>
             </ul>
-  
+              
             <p className="text-neutral-800 text-base leading-relaxed mt-4">
               In each section, you will see themes that commonly appear in actual
               practice. For each theme, please indicate how important it is in
@@ -455,6 +455,16 @@ export default function ClientAnnotator() {
                you might have a slightly or completely different approach. I'd love to hear if that is the case!
             </p>
           </div>
+        {/* Divider */}
+        <div className="relative max-w-6xl mx-auto mt-24 mb-20">
+          <div className="h-px w-full bg-gradient-to-r from-transparent via-neutral-300 to-transparent" />
+        </div>
+  
+        {/* ------------------------ CONTEXT ------------------------ */}
+        <section
+          id="context"
+          className="mx-auto max-w-2xl w-full"
+        >       
 
           <header className="mb-10">
             <h2 className="text-2xl font-semibold text-neutral-900 mb-4">
@@ -484,6 +494,11 @@ export default function ClientAnnotator() {
             onChange={handleSliderChange}
           />
         </section>
+
+        {/* Divider */}
+        <div className="relative max-w-6xl mx-auto mt-30 mb-20">
+          <div className="h-px w-full bg-gradient-to-r from-transparent via-neutral-300 to-transparent" />
+        </div>
   
         {/* ------------------------ CONTENT ------------------------ */}
         <section
@@ -522,7 +537,7 @@ export default function ClientAnnotator() {
           />
   
         </section>
-        <section className="mt-16 mx-auto w-full max-w-[950px] px-6 pb-40">
+        <section className="mt-16 mx-auto w-full max-w-[950px] px-6">
             <div className="bg-whitep-5 mb-6">
               <p className="text-neutral-800 text-base leading-relaxed mb-8">
                 Final step in this chapter: drag the themes around to show which ones
@@ -536,11 +551,16 @@ export default function ClientAnnotator() {
             />
             </div>            
         </section>
-  
+
+        {/* Divider */}
+                <div className="relative max-w-6xl mx-auto mt-30 mb-20">
+          <div className="h-px w-full bg-gradient-to-r from-transparent via-neutral-300 to-transparent" />
+        </div>
+        
         {/* ------------------------ COMMUNICATION ------------------------ */}
         <section
           id="communication"
-          className="mx-auto max-w-2xl w-full pb-40"
+          className="mx-auto max-w-2xl w-full"
         >
           <header className="mb-10">
             <h2 className="text-2xl font-semibold text-neutral-900 mb-4">
@@ -566,6 +586,11 @@ export default function ClientAnnotator() {
             onChange={handleSliderChange}
           />
         </section>
+
+        {/* Divider */}
+        <div className="relative max-w-6xl mx-auto mt-24 mb-20">
+          <div className="h-px w-full bg-gradient-to-r from-transparent via-neutral-300 to-transparent" />
+        </div>
   
         {/* ------------------------ SYNTHESIS ------------------------ */}
         <section
