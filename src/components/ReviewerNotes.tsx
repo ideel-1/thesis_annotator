@@ -43,11 +43,13 @@ export default function ReviewerNotes({
   // Fetch notes for the reviewer resolved by token
   useEffect(() => {
     if (!token || !visible) return;
+    const clean = token.trim(); 
+
 
     let cancelled = false;
     (async () => {
       const { data, error } = await supabase.rpc("interview_notes_get_text", {
-        p_token: token, // FIX: use the prop, not tokenRaw
+        p_token: clean, // FIX: use the prop, not tokenRaw
       });
       if (cancelled) return;
 
@@ -67,7 +69,28 @@ export default function ReviewerNotes({
       }));
 
       setRows(normalized);
+
+      // In ReviewerNotes, inside the effect where you call the RPC:
+      const { data: who } = await supabase
+      .from("reviewers")
+      .select("label")
+      .eq("token", clean)
+      .maybeSingle();
+
+      if (who?.label) {
+      const { data: rowsDirect, error: errDirect } = await supabase
+        .from("interview_notes")
+        .select("reviewer_label,chapter_key,summary,quotes,sort_order,updated_at")
+        .eq("reviewer_label", who.label)
+        .order("sort_order", { ascending: true });
+
+      console.log("[direct] notes", rowsDirect, errDirect);
+      }
+
+
     })();
+
+    
 
     return () => {
       cancelled = true;
@@ -105,6 +128,8 @@ export default function ReviewerNotes({
     );
   };
 
+
+
   return (
     <>
       {mounts.context &&
@@ -116,5 +141,7 @@ export default function ReviewerNotes({
       {mounts.synthesis &&
         createPortal(renderCard("synthesis", "Synthesis"), mounts.synthesis)}
     </>
+    
   );
+  
 }

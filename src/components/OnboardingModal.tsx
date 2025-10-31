@@ -51,7 +51,7 @@ export default function OnboardingModal({
       {/* Dialog */}
       <div
         ref={dialogRef}
-        className="relative z-[101] w-[min(92vw,1400px)] rounded-2xl border border-neutral-200 bg-white shadow-2xl"
+        className="relative z-[101] w-[min(92vw,700px)] rounded-2xl border border-neutral-200 bg-white shadow-2xl"
       >
         <div className="flex items-start justify-between p-5 border-b border-neutral-200">
           <h3 className="text-lg font-semibold text-neutral-900">{title}</h3>

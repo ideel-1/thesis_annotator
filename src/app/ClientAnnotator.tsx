@@ -9,6 +9,8 @@ import OwnerPanel from "@/components/OwnerPanel";
 import BoardOverlay from "@/components/BoardOverlay";
 import ReviewerNotes from "@/components/ReviewerNotes";
 import OnboardingModal from "@/components/OnboardingModal";
+import ContextCardsClient from "@/components/ContextCardsClient";
+import CommunicationCardsClient from "@/components/CommunicationCardsClient";
 
 
 type ReviewerStatus =
@@ -38,6 +40,7 @@ type ReviewerStatus =
         setComplete(data?.[0]?.review_complete ?? false);
       })();
     }, [token, canEdit]);
+
   
     // Handler to toggle and save
     async function toggle() {
@@ -70,30 +73,119 @@ type ReviewerStatus =
     );
   }
 
+  function LegendPanel() {
+    return (
+      <div className="rounded-xl border border-neutral-200 bg-white/80 backdrop-blur shadow-[0_8px_30px_rgba(0,0,0,0.04)] p-4 text-sm text-neutral-700 leading-[1.4] flex flex-wrap gap-x-6 gap-y-3">
+        {/* 3 = extensively */}
+        <div className="flex items-start gap-2 min-w-[12rem]">
+          <span className="mt-1 block w-2.5 h-2.5 rounded-full bg-[#ef4444]" />
+          <div className="text-[13px] leading-[1.4] text-neutral-800">
+            talked about extensively
+          </div>
+        </div>
+  
+        {/* 2 = mentioned */}
+        <div className="flex items-start gap-2 min-w-[12rem]">
+          <span className="mt-1 block w-2.5 h-2.5 rounded-full bg-[#facc15]" />
+          <div className="text-[13px] leading-[1.4] text-neutral-800">
+            mentioned
+          </div>
+        </div>
+  
+        {/* 1 = surfaced rarely */}
+        <div className="flex items-start gap-2 min-w-[12rem]">
+          <span className="mt-1 block w-2.5 h-2.5 rounded-full bg-[#9ca3af]" />
+          <div className="text-[13px] leading-[1.4] text-neutral-800">
+            talked about sparsely or did not
+          </div>
+        </div>
+      </div>
+    );
+  }
+
 export default function ClientAnnotator() {
   const params = useSearchParams();
   const tokenRaw = params.get("token");
-  const [reviewer, setReviewer] = useState<ReviewerStatus>({ state: tokenRaw ? "loading" : "idle" });
+  const token = tokenRaw?.trim() ?? null;   // <- normalize once
+  const [reviewer, setReviewer] = useState<ReviewerStatus>({ state: token ? "loading" : "idle" });
   const notesVisible = reviewer.state === "valid";
   const [showHelp, setShowHelp] = useState(false);
-  
+  const [contextMount, setContextMount] = useState<HTMLElement | null>(null);
+  const [commMount, setCommMount] = useState<HTMLElement | null>(null);
+  const [appearanceByTheme, setAppearanceByTheme] = useState<Record<string, number>>({});
   const [boardMount, setBoardMount] = useState<HTMLElement | null>(null);
+  const [contextCardsMount, setContextCardsMount] = useState<HTMLElement | null>(null);
+  const [communicationCardsMount, setCommunicationCardsMount] = useState<HTMLElement | null>(null);
+
+
+
   useEffect(() => {
     setBoardMount(document.getElementById("board-mount"));
   }, []);
+
+  useEffect(() => {
+    setContextMount(document.getElementById("appearance-context-mount"));
+    setCommMount(document.getElementById("appearance-communication-mount"));
+    setContextCardsMount(document.getElementById("context-cards-mount"));
+    setCommunicationCardsMount(document.getElementById("communication-cards-mount"));
+  }, []);
+
+  useEffect(() => {
+    // When the context / communication cards have been portaled into the DOM,
+    // force apply `in-view` to any `.reveal` cards that are already on screen.
+    const reveals = Array.from(
+      document.querySelectorAll<HTMLElement>(".reveal")
+    );
+  
+    for (const el of reveals) {
+      const r = el.getBoundingClientRect();
+      const inViewport =
+        r.top < window.innerHeight * 0.9 && // same threshold you use in observer if any
+        r.bottom > 0;
+  
+      if (inViewport) {
+        el.classList.add("in-view");
+      }
+    }
+  }, [contextCardsMount, communicationCardsMount]);
+  
+  
+
+  useEffect(() => {
+    (async () => {
+      if (!token) return;
+  
+      const { data, error } = await supabase.rpc("theme_appearance_for_reviewer", {
+        p_token: token,
+      });
+  
+      if (error) {
+        console.error("theme_appearance_for_reviewer fetch error:", error);
+        return;
+      }
+  
+      const map: Record<string, number> = {};
+      for (const row of data ?? []) {
+        if (row.item_key) map[row.item_key] = row.appearance;
+      }
+      setAppearanceByTheme(map);
+    })();
+  }, [token]);
+  
+  
 
 
   // validate token
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!tokenRaw) {
+      if (!token) {
         setReviewer({ state: "idle" });
         return;
       }
       setReviewer({ state: "loading" });
       const { data, error } = await supabase.rpc("validate_reviewer_token_text", {
-        p_token: tokenRaw!.trim(),
+        p_token: token!.trim(),
       });
       if (cancelled) return;
       
@@ -112,7 +204,7 @@ export default function ClientAnnotator() {
     return () => {
       cancelled = true;
     };
-  }, [tokenRaw]);
+  }, [token]);
 
   // scroll reveal (move here so it's client-only)
   useEffect(() => {
@@ -316,20 +408,34 @@ export default function ClientAnnotator() {
 
   return (
     <>
-      <Banner reviewer={reviewer} token={tokenRaw} onOpenHelp={() => setShowHelp(true)} />
+      <Banner reviewer={reviewer} token={token} onOpenHelp={() => setShowHelp(true)} />
+
+
+      {contextCardsMount &&
+        createPortal(
+          <ContextCardsClient appearanceByTheme={appearanceByTheme} />, 
+          contextCardsMount
+        )}
+
+      {communicationCardsMount &&
+        createPortal(
+          <CommunicationCardsClient appearanceByTheme={appearanceByTheme} />,
+          communicationCardsMount
+      )}
+
 
       {/* New: Board (edit if token & canComment; otherwise read-only) */}
         {boardMount
       ? createPortal(
-          <BoardOverlay token={tokenRaw} canEdit={reviewer.state === "valid" && reviewer.canComment} />,
+          <BoardOverlay token={token} canEdit={reviewer.state === "valid" && reviewer.canComment} appearanceByTheme={appearanceByTheme} />,
           boardMount
       ) : null}
 
       {/* NEW: per-reviewer interview notes */}
-      <ReviewerNotes token={tokenRaw} visible={notesVisible} />
+      <ReviewerNotes token={token} visible={notesVisible} />
 
       {commentingEnabled ? 
-        <CommentOverlay reviewerLabel={reviewer.label} token={tokenRaw!}/> : null}
+        <CommentOverlay reviewerLabel={reviewer.label} token={token!}/> : null}
       <OwnerPanel />
 
       {/* Floating help button to reopen */}
@@ -350,9 +456,9 @@ export default function ClientAnnotator() {
       </button>
 
       {/* Onboarding modal with embedded video + quick tips */}
-      <OnboardingModal open={showHelp} onClose={markSeenAndClose} title="How to add to this page:">
-        <div className="grid md:grid-cols-3 gap-6 items-start">
-          {/* Video */}
+      <OnboardingModal open={showHelp} onClose={markSeenAndClose} title="Welcome!">
+        <div>
+          {/* Video 
           <div className="w-full col-span-2">
             <video
               className="w-full rounded-xl border border-neutral-200 shadow"
@@ -372,13 +478,17 @@ export default function ClientAnnotator() {
               Your browser does not support the video tag.
             </video>
           </div>
-          {/* Key steps */}
+           Key steps */} 
           <div className="space-y-3 text-[16px] leading-7 text-neutral-800">
-            <p>This page is interactive. Leave comments directly on the content.</p>
-            <p><strong>Right-click</strong> anywhere to create a comment.</p>
-            <p><strong>Drag</strong> the comment to reposition; click the minus icon to <strong>collapse</strong>.</p>
-            <p>Edits auto-save. Use the top-left toggle to switch <strong>Edit / View</strong> mode.</p>
-            <p>Your notes are linked to your reviewer token and are visible only to you and the author.</p>
+          <p>Thank you for taking the time to review this work.</p>
+          <p>This page is interactive. You can leave comments directly on the content.</p>
+          <p>I’d love you to weave in comments as you move through the text: note what you align with, what you disagree with, and what you feel might be missing. Your feedback will help me refine and strengthen the argument further.</p>
+          <br></br>
+          <p><strong>Right-click</strong> anywhere to create a comment.</p>
+          <p><strong>Drag</strong> the comment to reposition, and use the minus icon to <strong>collapse</strong>.</p>
+          <p>Edits auto-save. Use the top-left toggle to switch between <strong>Edit</strong> and <strong>View</strong> mode.</p>
+          <p>When you have gone through the entire page and feel you are finished, please press the <strong>Mark as done</strong> button in the top menu to let me know you're done.</p>
+          <p>Your notes are linked to your reviewer token and are visible only to you and the author.</p>
           </div>
         </div>
       </OnboardingModal>
