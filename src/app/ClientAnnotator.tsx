@@ -1,17 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+
 import CommentOverlay from "@/components/CommentOverlay";
-import OwnerPanel from "@/components/OwnerPanel";
 import BoardOverlay from "@/components/BoardOverlay";
 import ReviewerNotes from "@/components/ReviewerNotes";
-import OnboardingModal from "@/components/OnboardingModal";
-import ContextCardsClient from "@/components/ContextCardsClient";
-import CommunicationCardsClient from "@/components/CommunicationCardsClient";
 
+import ContextSection from "@/components/ContextSection";
+import ContentSection from "@/components/ContentSection";
+import CommunicationSection from "@/components/CommunicationSection";
+import SynthesisBox from "@/components/SynthesisBox";
+
+/* -------------------------------------------------------------------------- */
+/*                                   Types                                    */
+/* -------------------------------------------------------------------------- */
 
 type ReviewerStatus =
   | { state: "idle" }
@@ -19,463 +24,602 @@ type ReviewerStatus =
   | { state: "valid"; label: string; canComment: boolean }
   | { state: "invalid" };
 
-  export function ReviewerCompleteToggle({
-    token,
-    canEdit,
-  }: {
-    token: string | null;
-    canEdit: boolean;
-  }) {
-    const [complete, setComplete] = useState<boolean | null>(null);
-  
-    // Fetch existing completion state on mount
-    useEffect(() => {
-      if (!token || !canEdit) return;
-      (async () => {
-        const { data, error } = await supabase.rpc("review_complete_get", { p_token: token });
-        if (error) {
-          console.error("review_complete_get error:", error);
-          return;
-        }
-        setComplete(data?.[0]?.review_complete ?? false);
-      })();
-    }, [token, canEdit]);
+type SliderKey = string; // e.g. "context::org_position"
 
-  
-    // Handler to toggle and save
-    async function toggle() {
-      if (!token || !canEdit) return;
-      const newVal = !complete;
-      setComplete(newVal);
-      const { error } = await supabase.rpc("review_complete_toggle", {
+type SliderState = {
+  value: number;
+  saving: boolean;
+  updatedAt: number;
+};
+
+/* -------------------------------------------------------------------------- */
+/*                         Mark-as-done checkbox widget                        */
+/* -------------------------------------------------------------------------- */
+
+function ReviewerCompleteToggle({
+  token,
+  canEdit,
+}: {
+  token: string | null;
+  canEdit: boolean;
+}) {
+  const [complete, setComplete] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!token || !canEdit) return;
+    (async () => {
+      const { data, error } = await supabase.rpc("review_complete_get", {
         p_token: token,
-        p_value: newVal,
       });
       if (error) {
-        console.error("review_complete_toggle error:", error);
-        // revert if failed
-        setComplete(!newVal);
+        console.error("review_complete_get error:", error);
+        return;
       }
+      setComplete(data?.[0]?.review_complete ?? false);
+    })();
+  }, [token, canEdit]);
+
+  async function toggle() {
+    if (!token || !canEdit) return;
+    const newVal = !complete;
+    setComplete(newVal);
+    const { error } = await supabase.rpc("review_complete_toggle", {
+      p_token: token,
+      p_value: newVal,
+    });
+    if (error) {
+      console.error("review_complete_toggle error:", error);
+      setComplete(!newVal);
     }
-  
-    if (!canEdit) return null;
-  
-    return (
-      <label className="flex items-center gap-1 cursor-pointer select-none text-sm font-normal pl-20 pr-20">
-        <span>Mark as done</span>
-        <input
-          type="checkbox"
-          className="w-4 h-4 rounded cursor-pointer border border-white/60 bg-white/20 accent-white"
-          checked={!!complete}
-          onChange={toggle}
-        />
-      </label>
-    );
   }
 
-  function LegendPanel() {
+  if (!canEdit) return null;
+
+  return (
+    <label className="flex items-center gap-2 cursor-pointer select-none text-sm font-normal">
+      <span>Mark as done</span>
+      <input
+        type="checkbox"
+        className="w-4 h-4 rounded cursor-pointer border border-white/60 bg-white/20 accent-white"
+        checked={!!complete}
+        onChange={toggle}
+      />
+    </label>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                   Banner                                   */
+/* -------------------------------------------------------------------------- */
+
+function Banner({
+  reviewer,
+  token,
+}: {
+  reviewer: ReviewerStatus;
+  token: string | null;
+}) {
+  const [complete, setComplete] = useState<boolean | null>(null);
+  const canEdit = reviewer.state === "valid" && reviewer.canComment;
+
+  // Fetch completion state on mount if valid
+  useEffect(() => {
+    if (!token || reviewer.state !== "valid") return;
+    (async () => {
+      const { data, error } = await supabase.rpc("review_complete_get", {
+        p_token: token,
+      });
+      if (error) {
+        console.error("review_complete_get error:", error);
+        return;
+      }
+      setComplete(data?.[0]?.review_complete ?? false);
+    })();
+  }, [token, reviewer]);
+
+  // Loading banner
+  if (reviewer.state === "loading") {
     return (
-      <div className="rounded-xl border border-neutral-200 bg-white/80 backdrop-blur shadow-[0_8px_30px_rgba(0,0,0,0.04)] p-4 text-sm text-neutral-700 leading-[1.4] flex flex-wrap gap-x-6 gap-y-3">
-        {/* 3 = extensively */}
-        <div className="flex items-start gap-2 min-w-[12rem]">
-          <span className="mt-1 block w-2.5 h-2.5 rounded-full bg-[#ef4444]" />
-          <div className="text-[13px] leading-[1.4] text-neutral-800">
-            talked about extensively
-          </div>
-        </div>
-  
-        {/* 2 = mentioned */}
-        <div className="flex items-start gap-2 min-w-[12rem]">
-          <span className="mt-1 block w-2.5 h-2.5 rounded-full bg-[#facc15]" />
-          <div className="text-[13px] leading-[1.4] text-neutral-800">
-            mentioned
-          </div>
-        </div>
-  
-        {/* 1 = surfaced rarely */}
-        <div className="flex items-start gap-2 min-w-[12rem]">
-          <span className="mt-1 block w-2.5 h-2.5 rounded-full bg-[#9ca3af]" />
-          <div className="text-[13px] leading-[1.4] text-neutral-800">
-            talked about sparsely or did not
-          </div>
-        </div>
+      <div className="fixed top-0 inset-x-0 z-40 bg-neutral-900 text-white text-center py-2 text-sm">
+        Validating reviewer link…
       </div>
     );
   }
 
+  // Invalid token banner
+  if (reviewer.state === "invalid") {
+    return (
+      <div className="fixed top-0 inset-x-0 z-40 bg-red-600 text-white text-center py-2 text-sm">
+        Invalid or expired link - view only
+      </div>
+    );
+  }
+
+  // Public / idle banner
+  if (reviewer.state === "idle") {
+    return (
+      <div className="fixed top-0 inset-x-0 z-40 bg-neutral-100 text-neutral-700 text-center py-2 text-sm">
+        Public view — comments disabled
+      </div>
+    );
+  }
+
+  // Valid reviewer banner
+  return (
+    <div
+      className={`fixed top-0 inset-x-0 z-61 flex flex-wrap items-center justify-center gap-20 py-3 text-sm ${
+        canEdit ? "bg-emerald-600 text-white" : "bg-amber-500 text-black"
+      }`}
+    >
+      <span>
+        Reviewer <strong>{reviewer.label}</strong> –{" "}
+        {canEdit ? "commenting enabled" : "view-only"}
+      </span>
+
+      <ReviewerCompleteToggle token={token} canEdit={canEdit} />
+
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              ClientAnnotator                                */
+/* -------------------------------------------------------------------------- */
+
 export default function ClientAnnotator() {
+  /* -------------------------------- routing -------------------------------- */
   const params = useSearchParams();
   const tokenRaw = params.get("token");
-  const token = tokenRaw?.trim() ?? null;   // <- normalize once
-  const [reviewer, setReviewer] = useState<ReviewerStatus>({ state: token ? "loading" : "idle" });
-  const notesVisible = reviewer.state === "valid";
-  const [showHelp, setShowHelp] = useState(false);
-  const [contextMount, setContextMount] = useState<HTMLElement | null>(null);
-  const [commMount, setCommMount] = useState<HTMLElement | null>(null);
-  const [appearanceByTheme, setAppearanceByTheme] = useState<Record<string, number>>({});
+  const token = tokenRaw?.trim() ?? null;
+
+  /* ---------------------------- reviewer status ---------------------------- */
+  const [reviewer, setReviewer] = useState<ReviewerStatus>({
+    state: token ? "loading" : "idle",
+  });
+
+  // this portal target is for the draggable board
   const [boardMount, setBoardMount] = useState<HTMLElement | null>(null);
-  const [contextCardsMount, setContextCardsMount] = useState<HTMLElement | null>(null);
-  const [communicationCardsMount, setCommunicationCardsMount] = useState<HTMLElement | null>(null);
+
+  // contextual reviewer notes are only visible if reviewer is valid
+  const notesVisible = reviewer.state === "valid";
 
 
 
+  /* --------------------------- slider state (global) --------------------------- */
+
+  // sliders is a map:
+  //   key:  "sectionKey::itemKey"  e.g. "context::org_position"
+  //   value: { value, saving, updatedAt }
+  const [sliders, setSliders] = useState<Record<SliderKey, SliderState>>({});
+
+  // debounce timers per slider
+  const saveTimersRef = useRef<Record<SliderKey, number | NodeJS.Timeout>>({});
+
+  /* ------------------------ validate reviewer token ------------------------ */
   useEffect(() => {
-    setBoardMount(document.getElementById("board-mount"));
-  }, []);
-
-  useEffect(() => {
-    setContextMount(document.getElementById("appearance-context-mount"));
-    setCommMount(document.getElementById("appearance-communication-mount"));
-    setContextCardsMount(document.getElementById("context-cards-mount"));
-    setCommunicationCardsMount(document.getElementById("communication-cards-mount"));
-  }, []);
-
-  useEffect(() => {
-    // When the context / communication cards have been portaled into the DOM,
-    // force apply `in-view` to any `.reveal` cards that are already on screen.
-    const reveals = Array.from(
-      document.querySelectorAll<HTMLElement>(".reveal")
-    );
-  
-    for (const el of reveals) {
-      const r = el.getBoundingClientRect();
-      const inViewport =
-        r.top < window.innerHeight * 0.9 && // same threshold you use in observer if any
-        r.bottom > 0;
-  
-      if (inViewport) {
-        el.classList.add("in-view");
-      }
+    if (!token) {
+      setReviewer({ state: "idle" });
+      return;
     }
-  }, [contextCardsMount, communicationCardsMount]);
-  
-  
 
-  useEffect(() => {
-    (async () => {
-      if (!token) return;
-  
-      const { data, error } = await supabase.rpc("theme_appearance_for_reviewer", {
-        p_token: token,
-      });
-  
-      if (error) {
-        console.error("theme_appearance_for_reviewer fetch error:", error);
-        return;
-      }
-  
-      const map: Record<string, number> = {};
-      for (const row of data ?? []) {
-        if (row.item_key) map[row.item_key] = row.appearance;
-      }
-      setAppearanceByTheme(map);
-    })();
-  }, [token]);
-  
-  
-
-
-  // validate token
-  useEffect(() => {
     let cancelled = false;
+
     (async () => {
-      if (!token) {
-        setReviewer({ state: "idle" });
-        return;
-      }
       setReviewer({ state: "loading" });
-      const { data, error } = await supabase.rpc("validate_reviewer_token_text", {
-        p_token: token!.trim(),
-      });
+
+      // NOTE: your DB function is validate_reviewer_token_text(p_token uuid)
+      // If it's named differently in DB, align here.
+      const { data, error } = await supabase.rpc(
+        "validate_reviewer_token_text",
+        {
+          p_token: token,
+        }
+      );
+
       if (cancelled) return;
-      
+
       if (error) {
         console.error("validate_reviewer_token_text error:", error);
         setReviewer({ state: "invalid" });
         return;
       }
+
       if (!data?.length) {
         setReviewer({ state: "invalid" });
         return;
       }
+
       const row = data[0];
-      setReviewer({ state: "valid", label: row.label, canComment: !!row.can_comment });
+      setReviewer({
+        state: "valid",
+        label: row.label,
+        canComment: !!row.can_comment,
+      });
     })();
+
     return () => {
       cancelled = true;
     };
   }, [token]);
 
-  // scroll reveal (move here so it's client-only)
+  /* ----------------------------- mount board div ---------------------------- */
   useEffect(() => {
-    const reveals = Array.from(document.querySelectorAll<HTMLElement>(".reveal"));
-    const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) e.target.classList.add("in-view");
-        });
-      },
-      { threshold: 0.12 }
-    );
-    reveals.forEach((el) => io.observe(el));
-    return () => io.disconnect();
+    setBoardMount(document.getElementById("board-mount"));
   }, []);
 
-  // When reviewer becomes valid, open modal if not seen for this label
+
+  /* ---------------------- initial slider load from DB ---------------------- */
   useEffect(() => {
-    if (reviewer.state !== "valid") return;
-    const k = `annotator:onboarding:v1:${reviewer.label}`;
-    const seen = typeof window !== "undefined" ? localStorage.getItem(k) : "seen";
-    if (!seen) setShowHelp(true);
-  }, [reviewer]);
+    if (!token) return;
 
-  const markSeenAndClose = () => {
-    if (reviewer.state === "valid") {
-      const k = `annotator:onboarding:v1:${reviewer.label}`;
-      localStorage.setItem(k, "seen");
-    }
-    setShowHelp(false);
-  };
+    (async () => {
+      const { data, error } = await supabase.rpc("sliders_list", {
+        p_token: token,
+      });
 
-  function useFlowOffset({
-    sectionId,
-    mountId,
-    cssVar,
-    deps = [],
-  }: {
-    sectionId: string;
-    mountId: string;
-    cssVar: string;
-    deps?: React.DependencyList;
-  }) {
-    useEffect(() => {
-      if (typeof window === "undefined" || typeof document === "undefined") return;
-  
-      const section = document.getElementById(sectionId);
-      const mount = document.getElementById(mountId);
-      if (!section || !mount) {
-        // Uncomment for debugging:
-        // console.warn(`useFlowOffset: missing element(s)`, { sectionId, mountId, section, mount });
+      if (error) {
+        console.error("sliders_list error", error);
         return;
       }
-  
-      const apply = () => {
-        // Use offsetHeight for layout height (includes padding)
-        const h = mount.offsetHeight || 0;
-        section.style.setProperty(cssVar, `${h}px`);
-        // Uncomment for debugging:
-        // console.log(`[flow-offset] ${cssVar} = ${h}px on #${sectionId}`);
-      };
-  
-      // Initial measure (next frame helps after layout/paint)
-      const raf = requestAnimationFrame(apply);
-  
-      // Observe the mount’s size changes (content/quotes arriving later)
-      let ro: ResizeObserver | null = null;
-      if ("ResizeObserver" in window) {
-        ro = new ResizeObserver(apply);
-        ro.observe(mount);
-      }
-  
-      // Fallback: also recalc on window resize
-      window.addEventListener("resize", apply);
-  
-      return () => {
-        cancelAnimationFrame(raf);
-        window.removeEventListener("resize", apply);
-        if (ro) ro.disconnect();
-      };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, deps);
-  }
-  
-  
-  // Offset the CONTEXT flow by the height of the context notes card
-  useFlowOffset({
-    sectionId: "context",
-    mountId: "notes-context-mount",
-    cssVar: "--context-notes-offset",
-    deps: [notesVisible],
-  });
-  
-  // Offset the COMMUNICATION flow similarly
-  useFlowOffset({
-    sectionId: "how", // your section id for Communication (in your code it's "how")
-    mountId: "notes-communication-mount",
-    cssVar: "--communication-notes-offset",
-    deps: [notesVisible],
-  });
 
-  function Banner({
-    reviewer,
-    token,
-    onOpenHelp,
-  }: {
-    reviewer: ReviewerStatus;
-    token: string | null;
-    onOpenHelp: () => void;
-  }) {
-    const [complete, setComplete] = useState<boolean | null>(null);
-    const canEdit = reviewer.state === "valid" && reviewer.canComment;
-  
-    // Fetch current completion
-    useEffect(() => {
-      if (!token || reviewer.state !== "valid") return;
-      (async () => {
-        const { data, error } = await supabase.rpc("review_complete_get", { p_token: token });
+      const initial: Record<SliderKey, SliderState> = {};
+      if (data) {
+        for (const row of data) {
+          // row.section_key, row.item_key, row.value, row.updated_at
+          const k = `${row.section_key}::${row.item_key}`;
+          initial[k] = {
+            value: Number(row.value),
+            saving: false,
+            updatedAt: new Date(row.updated_at).getTime(),
+          };
+        }
+      }
+      setSliders(initial);
+    })();
+  }, [token]);
+
+  /* --------------------------- slider change handler --------------------------- */
+  function handleSliderChange(
+    sectionKey: string,
+    itemKey: string,
+    nextVal: number
+  ) {
+    const sliderId: SliderKey = `${sectionKey}::${itemKey}`;
+
+    // optimistic local update
+    setSliders((prev) => ({
+      ...prev,
+      [sliderId]: {
+        value: nextVal,
+        saving: true,
+        updatedAt: Date.now(),
+      },
+    }));
+
+    // debounce save so we don't spam supabase on every pixel of drag
+    const existingTimer = saveTimersRef.current[sliderId];
+    if (existingTimer) {
+      clearTimeout(existingTimer as number);
+    }
+
+    saveTimersRef.current[sliderId] = setTimeout(async () => {
+      try {
+        const { error } = await supabase.rpc("slider_upsert", {
+          p_token: token,
+          p_section_key: sectionKey,
+          p_item_key: itemKey,
+          p_value: nextVal,
+        });
+
         if (error) {
-          console.error("review_complete_get error:", error);
+          console.error("slider_upsert error", error);
+
+          // stop the spinner but keep the optimistic value
+          setSliders((prev) => ({
+            ...prev,
+            [sliderId]: {
+              ...(prev[sliderId] ?? {
+                value: nextVal,
+                updatedAt: Date.now(),
+              }),
+              saving: false,
+            },
+          }));
+
           return;
         }
-        setComplete(data?.[0]?.review_complete ?? false);
-      })();
-    }, [token, reviewer]);
-  
-    // Toggle handler
-    const toggle = async () => {
-      if (!token || reviewer.state !== "valid") return;
-      const newVal = !complete;
-      setComplete(newVal);
-      const { error } = await supabase.rpc("review_complete_toggle", {
-        p_token: token,
-        p_value: newVal,
-      });
-      if (error) console.error("review_complete_toggle error:", error);
-    };
-  
-    // Loading state
-    if (reviewer.state === "loading")
-      return (
-        <div className="fixed top-0 inset-x-0 z-40 bg-neutral-900 text-white text-center py-2 text-sm">
-          Validating reviewer link…
-        </div>
-      );
-  
-    // Invalid or public view
-    if (reviewer.state === "invalid")
-      return (
-        <div className="fixed top-0 inset-x-0 z-40 bg-red-600 text-white text-center py-2 text-sm">
-          Invalid or expired link — view-only
-        </div>
-      );
-    if (reviewer.state === "idle")
-      return (
-        <div className="fixed top-0 inset-x-0 z-40 bg-neutral-100 text-neutral-700 text-center py-2 text-sm">
-          Public view — comments disabled
-        </div>
-      );
-  
-    // Reviewer valid
-    return (
-      <div
-        className={`fixed top-0 inset-x-0 z-1gi00 flex items-center justify-center gap-4 py-3 text-sm ${
-          canEdit ? "bg-emerald-600 text-white" : "bg-amber-500 text-black"
-        }`}
-      >
-        <span>
-          Reviewer <strong>{reviewer.label}</strong> - {" "}
-          {canEdit ? "commenting enabled" : "view-only (commenting disabled)"}
-        </span>
 
-        <ReviewerCompleteToggle token={token} canEdit={canEdit} />
-
-        {canEdit && (
-          <button
-            onClick={onOpenHelp}
-            className="flex items-center cursor-pointer gap-1 text-sm font-normal rounded-md border border-white/40 bg-white/20 px-2 py-0.5 hover:bg-white/30"
-            title="How to work with this page:"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="w-3.5 h-3.5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M9.09 9a3 3 0 115.82 1c0 2-3 2-3 4" />
-              <path d="M12 17h.01" />
-              <circle cx="12" cy="12" r="10" />
-            </svg>
-            Help
-          </button>
-        )}
-      </div>
-    );
+        // success: mark saved
+        setSliders((prev) => ({
+          ...prev,
+          [sliderId]: {
+            ...(prev[sliderId] ?? {
+              value: nextVal,
+              updatedAt: Date.now(),
+            }),
+            saving: false,
+            updatedAt: Date.now(),
+          },
+        }));
+      } finally {
+        delete saveTimersRef.current[sliderId];
+      }
+    }, 300);
   }
-  
 
-  const commentingEnabled = reviewer.state === "valid" && reviewer.canComment;
+  /* ------------------------------ commenting ------------------------------ */
+
+  const commentingEnabled =
+    reviewer.state === "valid" && reviewer.canComment;
+
+  /* --------------------------------- render -------------------------------- */
 
   return (
     <>
-      <Banner reviewer={reviewer} token={token} onOpenHelp={() => setShowHelp(true)} />
-
-
-      {contextCardsMount &&
-        createPortal(
-          <ContextCardsClient appearanceByTheme={appearanceByTheme} />, 
-          contextCardsMount
-        )}
-
-      {communicationCardsMount &&
-        createPortal(
-          <CommunicationCardsClient appearanceByTheme={appearanceByTheme} />,
-          communicationCardsMount
-      )}
-
-
-      {/* New: Board (edit if token & canComment; otherwise read-only) */}
-        {boardMount
-      ? createPortal(
-          <BoardOverlay token={token} canEdit={reviewer.state === "valid" && reviewer.canComment} appearanceByTheme={appearanceByTheme} />,
-          boardMount
-      ) : null}
-
-      {/* NEW: per-reviewer interview notes */}
+      {/* fixed banner at top */}
+      <Banner
+        reviewer={reviewer}
+        token={token}
+      />
+  
+      {/* reviewer contextual notes card (anchors itself in-page) */}
       <ReviewerNotes token={token} visible={notesVisible} />
+      {/* main single-column content */}
+      <main className="relative mx-auto w-full px-6 pt-24 pb-32 text-neutral-900">
+        {/* ------------------------ OVERVIEW ------------------------ */}
+        <section
+          id="overview"
+          className="mx-auto max-w-2xl w-full pb-16"
+        >
+          <h1 className="text-4xl font-semibold tracking-tight mb-8 text-center text-neutral-900">
+            Master Thesis: defining the value argument for design
+          </h1>
+  
+          <div className="relative italic rounded-2xl border border-neutral-200 bg-emerald shadow-sm p-6 mb-12">
+            {/* arrow */}
+          
+            <h2 className="text-lg font-semibold text-neutral-900 mb-3">
+            <span className="not-italic">⌘</span> Welcome & How to Comment
+            </h2>
 
-      {commentingEnabled ? 
-        <CommentOverlay reviewerLabel={reviewer.label} token={token!}/> : null}
-      <OwnerPanel />
+            <p className="text-neutral-800 text-base leading-relaxed mb-4">
+              Thank you for taking the time to review this page. Your feedback will help
+              refine how the argument for design’s value is framed and communicated.
+            </p>
 
-      {/* Onboarding modal with embedded video + quick tips */}
-      <OnboardingModal open={showHelp} onClose={markSeenAndClose} title="Welcome!">
-        <div>
-          {/* Video 
-          <div className="w-full col-span-2">
-            <video
-              className="w-full rounded-xl border border-neutral-200 shadow"
-              controls
-              playsInline
-              poster="/videos/annotator-intro-poster.jpg"
-            >
-              <source src="/videos/annotator-intro.webm" type="video/webm" />
-              <source src="/videos/annotator-intro.mp4" type="video/mp4" />
-              <track
-                kind="captions"
-                srcLang="en"
-                src="/videos/annotator-intro.vtt"
-                label="English"
-                default
-              />
-              Your browser does not support the video tag.
-            </video>
+            <p className="text-neutral-800 text-base leading-relaxed mb-4">
+              Please use the comment tool to share your thoughts as you
+              read. I’m equally interested in points you agree with,
+              those you disagree with, and anything that feels
+              unclear, missing, or overstated.
+            </p>
+
+            <ul className="list-disc pl-5 space-y-2 text-neutral-800 text-base leading-relaxed mb-4">
+              <li>
+                <strong>Right-click</strong> anywhere on this page to create a comment. Press the checkmark button to confirm them.
+              </li>
+              <li>
+                <strong>Drag</strong> comments to reposition them.
+              </li>
+              <li>
+                Use the <strong>minus icon</strong> to collapse or hide a note once
+                reviewed.
+              </li>
+            </ul>
+
+            <p className="text-neutral-700 text-base leading-relaxed">
+              All comments are linked to your reviewer token and are visible only to you
+              and the author.
+            </p>
           </div>
-           Key steps */} 
-          <div className="space-y-3 text-[16px] leading-7 text-neutral-800">
-          <p>Thank you for taking the time to review this work.</p>
-          <p>This page is interactive. You can leave comments directly on the content.</p>
-          <p>I’d love you to weave in comments as you move through the text: note what you align with, what you disagree with, and what you feel might be missing. Your feedback will help me refine and strengthen the argument further.</p>
-          <br></br>
-          <p><strong>Right-click</strong> anywhere to create a comment.</p>
-          <p><strong>Drag</strong> the comment to reposition, and use the minus icon to <strong>collapse</strong>.</p>
-          <p>Edits auto-save. Use the top-left toggle to switch between <strong>Edit</strong> and <strong>View</strong> mode.</p>
-          <p>When you have gone through the entire page and feel you are finished, please press the <strong>Mark as done</strong> button in the top menu to let me know you're done.</p>
-          <p>Your notes are linked to your reviewer token and are visible only to you and the author.</p>
+        </section>
+  
+        {/* ------------------------ CONTEXT ------------------------ */}
+        <section
+          id="context"
+          className="mx-auto max-w-2xl w-full pb-40"
+        >
+          <div className="mb-20">
+          <h2 className="text-2xl font-semibold text-neutral-900 mb-4">
+              Introduction
+            </h2>
+            <p className="text-neutral-800 text-base leading-relaxed">
+              Based on interviews with design leaders, design advocacy appears to
+              operate across three interdependent aspects:
+            </p>
+  
+            <ul className="list-disc pl-5 space-y-2 text-neutral-800 text-base leading-relaxed mt-4">
+              <li>
+                Organizational context - where design sits structurally, who it
+                reports to, and how that shapes access to strategy.
+              </li>
+              <li>
+                Advocacy content - which value claims designers lean on to frame
+                design as relevant, fundable, and legitimate.
+              </li>
+              <li>
+                Communication tactics - how those claims are made credible and
+                persuasive in the organization.
+              </li>
+            </ul>
+  
+            <p className="text-neutral-800 text-base leading-relaxed mt-4">
+              In each section, you will see themes that commonly appear in actual
+              practice. For each theme, please indicate how important it is in
+              your current reality, leave comments where needed, and then reorder
+              the lenses on the board.
+            </p>
+            <p className=" italic font-semibold text-neutral-800 text-base leading-relaxed mt-4">
+              Of course, this page is not definitive. The above aspects are ones that 
+              I have identified through going through the text, and, given your company,
+               you might have a slightly or completely different approach. I'd love to hear if that is the case!
+            </p>
           </div>
-        </div>
-      </OnboardingModal>
+
+          <header className="mb-10">
+            <h2 className="text-2xl font-semibold text-neutral-900 mb-4">
+              1. Organizational context
+            </h2>
+            <p className="text-neutral-700 text-base leading-relaxed">
+              Advocacy depends on where design lives in the organization, who
+              controls budget, and whose problems you are allowed to shape.
+              Resource levels, leadership turnover, and literacy all affect how
+              credible you sound. Please review the following aspects and score
+              their relevance to you. You can click anywhere on the page to leave
+              a comment and drag that comment bubble if you want to attach context
+              to a specific paragraph.
+            </p>
+            <p className="text-neutral-700 text-base leading-relaxed mt-4">
+              Use the sliders to explain how much you need to look at this aspect before engaging in design advocacy.
+            </p>
+          </header>
+  
+          <ContextSection
+            sliders={Object.fromEntries(
+              Object.entries(sliders).map(([k, s]) => [
+                k,
+                { value: s.value, saving: s.saving },
+              ])
+            )}
+            onChange={handleSliderChange}
+          />
+        </section>
+  
+        {/* ------------------------ CONTENT ------------------------ */}
+        <section
+          id="content"
+          className="mx-auto max-w-2xl w-full"
+        >
+          <header className="mb-10">
+            <h2 className="text-2xl font-semibold text-neutral-900 mb-4">
+              2. Advocacy content
+            </h2>
+  
+            <p className="text-neutral-700 text-base leading-relaxed">
+              These are typical value narratives design leaders use to justify why
+              design matters: customer closeness, integration and efficiency,
+              differentiation and quality, strategic foresight, system consistency,
+              culture shift, and creativity as a resource. Please indicate how
+              central each is to how you currently “sell” design internally, and
+              feel free to comment where you disagree or where something is
+              missing.
+            </p>
+  
+            <p className="text-neutral-700 text-base leading-relaxed mt-4">
+              After rating them, you can drag these same themes (and add your
+              own) inside the prioritization board below.
+            </p>
+          </header>
+  
+          <ContentSection
+            sliders={Object.fromEntries(
+              Object.entries(sliders).map(([k, s]) => [
+                k,
+                { value: s.value, saving: s.saving },
+              ])
+            )}
+            onChange={handleSliderChange}
+          />
+  
+        </section>
+        <section className="mt-16 mx-auto w-full max-w-[950px] px-6 pb-40">
+            <div className="bg-whitep-5 mb-6">
+              <p className="text-neutral-800 text-base leading-relaxed mb-8">
+                Final step in this chapter: drag the themes around to show which ones
+                usually lead your internal pitch. You can add themes as well if you feel like any are missing.
+              </p>
+              {/* BoardOverlay is portaled here by ClientAnnotator */}
+            <div
+              id="board-mount"
+              className="w-full flex items-center justify-center"
+              style={{ minHeight: "600px" }}
+            />
+            </div>            
+        </section>
+  
+        {/* ------------------------ COMMUNICATION ------------------------ */}
+        <section
+          id="communication"
+          className="mx-auto max-w-2xl w-full pb-40"
+        >
+          <header className="mb-10">
+            <h2 className="text-2xl font-semibold text-neutral-900 mb-4">
+              3. Communication tactics
+            </h2>
+  
+            <p className="text-neutral-700 text-base leading-relaxed">
+              This section focuses on how the message is delivered: prototypes and
+              demos, translation into business vocabulary, strategic repetition,
+              and creating small wins people retell. Please rate how actively you
+              already rely on each practice. You can place comments here on which
+              of these tactics you trust or reject.
+            </p>
+          </header>
+  
+          <CommunicationSection
+            sliders={Object.fromEntries(
+              Object.entries(sliders).map(([k, s]) => [
+                k,
+                { value: s.value, saving: s.saving },
+              ])
+            )}
+            onChange={handleSliderChange}
+          />
+        </section>
+  
+        {/* ------------------------ SYNTHESIS ------------------------ */}
+        <section
+          id="synthesis"
+          className="mx-auto max-w-2xl w-full pb-24"
+        >
+          <header className="mb-10">
+            <h2 className="text-2xl font-semibold text-neutral-900 mb-4">
+              4. Synthesis
+            </h2>
+
+            <p className="text-neutral-700 text-base leading-relaxed mb-4">
+              You have now seen: the organizational context that shapes advocacy,
+              the value stories (content) you can lean on, and the tactics to make
+              those stories land. This last step asks you to synthesize that into
+              a short internal narrative.
+            </p>
+
+            <p className="text-neutral-700 text-base leading-relaxed">
+              Please draft, in plain language, how you would argue for design’s
+              importance in your organization right now. Imagine you are talking
+              to an executive sponsor or a skeptical peer lead. Focus on what you
+              would actually say. If you don't have time, bulletpoints are also ok.
+            </p>
+          </header>
+
+          {/* new synthesis box */}
+          <SynthesisBox
+            token={notesVisible ? token : null}
+            sectionKey="synthesis_main"
+            canEdit={notesVisible /* or reviewer.canComment if you want lock */}
+          />
+
+          <p className="text-normal mt-8 leading-relaxed mt-3">
+              Once you are finished reviewing, press the <strong>mark as done</strong> checkmark in the green top banner. Thank you for your work!
+            </p>
+        </section>
+      </main>
+  
+      {/* BoardOverlay rendered into #board-mount as a portal */}
+      {boardMount &&
+        createPortal(
+          <BoardOverlay
+            token={token ?? undefined}
+            canEdit={reviewer.state === "valid" && reviewer.canComment}
+          />,
+          boardMount
+        )}
+  
+      {/* Floating comment overlay (right-click etc.) */}
+      {commentingEnabled && reviewer.state === "valid" && token ? (
+        <CommentOverlay reviewerLabel={reviewer.label} token={token} />
+      ) : null}
+  
     </>
   );
-  
 }

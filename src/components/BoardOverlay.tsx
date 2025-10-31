@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { AppearanceBadge } from "@/components/AppearanceBadge";
 
 /* -------------------------------------------------------------------------- */
 /*                                   Types                                    */
@@ -32,7 +31,6 @@ type BoardRow = {
 type BoardOverlayProps = {
   token?: string | null;
   canEdit: boolean;
-  appearanceByTheme?: Record<string, number>;
 };
 
 /**
@@ -43,7 +41,7 @@ type BoardNote = {
   xPct: number;
   yPct: number;
   title: string;
-  body: string; // multiline bullets text
+  body: string;
   collapsed: boolean;
   createdAt: number;
   updatedAt: number;
@@ -56,30 +54,29 @@ const clamp = (v: number) => Math.max(0, Math.min(100, v));
 /* -------------------------------------------------------------------------- */
 
 const DEFAULTS: Record<BoardItemKey, Omit<BoardRow, "item_key">> = {
-  // CORE (left column)
-  customer: { xPct: 15, yPct: 16, zone: "core", collapsed: false },
-  integrator: { xPct: 34, yPct: 30, zone: "core", collapsed: false },
-  // SECONDARY (right column)
-  differentiator: { xPct: 66, yPct: 12, zone: "secondary", collapsed: false },
-  strategic: { xPct: 84, yPct: 28, zone: "secondary", collapsed: false },
-  // SUPPORTING (bottom, 2/3 width)
-  consistency: { xPct: 14, yPct: 76, zone: "supporting", collapsed: false },
-  creativity: { xPct: 33, yPct: 80, zone: "supporting", collapsed: false },
-  culture: { xPct: 52, yPct: 84, zone: "supporting", collapsed: false },
+  customer: { xPct: 20, yPct: 20, zone: "core", collapsed: false },
+  integrator: { xPct: 40, yPct: 28, zone: "core", collapsed: false },
+
+  differentiator: { xPct: 60, yPct: 20, zone: "secondary", collapsed: false },
+  strategic: { xPct: 80, yPct: 28, zone: "secondary", collapsed: false },
+
+  consistency: { xPct: 30, yPct: 70, zone: "supporting", collapsed: false },
+  creativity: { xPct: 50, yPct: 78, zone: "supporting", collapsed: false },
+  culture: { xPct: 70, yPct: 72, zone: "supporting", collapsed: false },
 };
 
 const LABELS: Record<BoardItemKey, string> = {
-  customer: "Design as Connection to Customer",
-  integrator: "Design as Integrator & Efficiency Enabler",
-  differentiator: "Design as Differentiator & Quality Standard",
-  strategic: "Design as Strategic Lens & Vision Caster",
-  consistency: "Consistency through Design Systems",
-  culture: "Culture Change and Evangelism",
-  creativity: "Creativity as a Sustaining Resource",
+  customer: "Connection to Customer",
+  integrator: "Integration / Efficiency",
+  differentiator: "Differentiation / Quality",
+  strategic: "Strategic Lens / Foresight",
+  consistency: "Consistency & Scale",
+  culture: "Culture / Evangelism",
+  creativity: "Creativity as Resource",
 };
 
 /* -------------------------------------------------------------------------- */
-/*                      Reviewer-created editable board card                  */
+/*                      Reviewer-created editable board cards                 */
 /* -------------------------------------------------------------------------- */
 
 function ReviewerBoardCard({
@@ -89,28 +86,19 @@ function ReviewerBoardCard({
   savedAt,
   onStartDrag,
   onTitleChange,
-  onBodyChange,
   onToggleCollapse,
   onDelete,
 }: {
-  note: {
-    id: string;
-    xPct: number;
-    yPct: number;
-    title: string;
-    body: string;
-    collapsed: boolean;
-  };
+  note: BoardNote;
   canEdit: boolean;
   isSaving: boolean;
   savedAt: number | undefined;
   onStartDrag: (e: React.PointerEvent, id: string) => void;
   onTitleChange: (id: string, t: string) => void;
-  onBodyChange: (id: string, t: string) => void;
   onToggleCollapse: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
-  // collapsed "chip"
+  // Collapsed pill style (unchanged)
   if (note.collapsed) {
     return (
       <div
@@ -132,18 +120,16 @@ function ReviewerBoardCard({
             e.stopPropagation();
             if (canEdit) onToggleCollapse(note.id);
           }}
-          className="rounded-full border border-neutral-300 bg-white shadow px-4 pt-1.5 pb-1 text-md text-neutral-800 font-semibold"
-          title={note.title || "Reviewer card"}
+          className="rounded-full border border-neutral-300 bg-white shadow px-4 pt-1.5 pb-1 text-[13px] text-neutral-800 font-semibold"
+          title={note.title || "Your card"}
         >
-          {note.title
-            ? note.title.slice(0, 28)
-            : "Your card"}
+          {note.title ? note.title.slice(0, 32) : "Your card"}
         </button>
       </div>
     );
   }
 
-  // expanded full board-style card
+  // Expanded card, simplified: title only + footer (delete / saved)
   return (
     <div
       className={
@@ -159,19 +145,19 @@ function ReviewerBoardCard({
       }}
       onPointerDown={(e) => onStartDrag(e, note.id)}
     >
-      <div className="w-[300px] max-w-[84vw] rounded-xl border border-neutral-200 bg-white shadow p-4">
-        {/* header */}
+      <div className="w-[220px] max-w-[84vw] rounded-xl border border-neutral-200 bg-white shadow p-4">
+        {/* header / title row */}
         <div className="flex items-start justify-between gap-3">
           {canEdit ? (
             <input
-              className="font-semibold text-neutral-900 w-full bg-transparent outline-none text-[15px] leading-snug"
+              className="font-semibold text-neutral-900 w-full bg-transparent outline-none text-[14px] leading-snug"
               value={note.title}
-              placeholder="Untitled value argument"
+              placeholder="Untitled"
               onChange={(e) => onTitleChange(note.id, e.target.value)}
             />
           ) : (
-            <h4 className="font-semibold text-neutral-900">
-              {note.title || "Untitled value argument"}
+            <h4 className="font-semibold text-neutral-900 text-[14px] leading-snug">
+              {note.title || "Untitled"}
             </h4>
           )}
 
@@ -197,31 +183,6 @@ function ReviewerBoardCard({
           )}
         </div>
 
-        {/* body / bullets */}
-        <div className="mt-3 text-sm text-neutral-700 tracking-[0.01em]">
-          {canEdit ? (
-            <textarea
-              className="w-full bg-transparent outline-none text-sm leading-snug resize-none"
-              placeholder={"• Bullet point 1\n• Bullet point 2"}
-              value={note.body}
-              rows={4}
-              onChange={(e) => onBodyChange(note.id, e.target.value)}
-            />
-          ) : (
-            <ul className="space-y-2 list-disc pl-5">
-              {note.body
-                .split("\n")
-                .map((line) => line.trim())
-                .filter((line) => line.length > 0)
-                .map((line, idx) => (
-                  <li key={idx}>
-                    {line.replace(/^•\s?/, "")}
-                  </li>
-                ))}
-            </ul>
-          )}
-        </div>
-
         {/* footer */}
         <div className="mt-4 flex items-center justify-between">
           {canEdit ? (
@@ -230,7 +191,7 @@ function ReviewerBoardCard({
                 e.stopPropagation();
                 onDelete(note.id);
               }}
-              className="text-xs text-neutral-500 hover:text-red-600 cursor-pointer"
+              className="text-[11px] text-neutral-500 hover:text-red-600 cursor-pointer"
             >
               Delete
             </button>
@@ -250,21 +211,53 @@ function ReviewerBoardCard({
 }
 
 /* -------------------------------------------------------------------------- */
+/*                            Default Themed Label Card                        */
+/* -------------------------------------------------------------------------- */
+
+function ThemeCard({
+  row,
+  label,
+  canEdit,
+  onStartDrag,
+}: {
+  row: BoardRow;
+  label: string;
+  canEdit: boolean;
+  onStartDrag: (e: React.PointerEvent, key: BoardItemKey) => void;
+}) {
+  return (
+    <div
+      className={
+        "absolute z-10 " +
+        (canEdit
+          ? "cursor-grab active:cursor-grabbing"
+          : "cursor-default opacity-95")
+      }
+      style={{
+        left: `${row.xPct}%`,
+        top: `${row.yPct}%`,
+        transform: "translate(-40%, -24px)",
+      }}
+      onPointerDown={(e) => onStartDrag(e, row.item_key)}
+    >
+      <div className="rounded-full border border-neutral-300 bg-white shadow px-4 py-2 text-[13px] text-neutral-800 font-semibold whitespace-nowrap">
+        {label}
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /*                              Public wrapper                                 */
 /* -------------------------------------------------------------------------- */
 
 export default function BoardOverlay({
   token,
   canEdit,
-  appearanceByTheme,
 }: BoardOverlayProps) {
   return (
-    <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen">
-      <BoardSurface
-        token={token}
-        canEdit={canEdit}
-        appearanceByTheme={appearanceByTheme}
-      />
+    <div className="w-[60vw] max-w-[900px] min-w-[320px]">
+      <BoardSurface token={token} canEdit={canEdit} />
     </div>
   );
 }
@@ -273,45 +266,30 @@ export default function BoardOverlay({
 /*                                BoardSurface                                 */
 /* -------------------------------------------------------------------------- */
 
-function BoardSurface({
-  token,
-  canEdit,
-  appearanceByTheme,
-}: BoardOverlayProps) {
+function BoardSurface({ token, canEdit }: BoardOverlayProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
 
-  // purely visual zone refs
-  const coreRef = useRef<HTMLDivElement>(null);
-  const secondaryRef = useRef<HTMLDivElement>(null);
-  const supportingRef = useRef<HTMLDivElement>(null);
-  const unusedRef = useRef<HTMLDivElement>(null);
-
-  // canonical rows
   const [rows, setRows] = useState<Record<BoardItemKey, BoardRow>>(() => {
-    const init: any = {};
+    const init: Record<BoardItemKey, BoardRow> = {} as any;
     (Object.keys(DEFAULTS) as BoardItemKey[]).forEach((k) => {
       init[k] = { item_key: k, ...DEFAULTS[k] };
     });
     return init;
   });
-
   const rowsRef = useRef(rows);
   useEffect(() => {
     rowsRef.current = rows;
   }, [rows]);
 
-  const [toast, setToast] = useState<string | null>(null);
-  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-
-  // reviewer-created notes/cards
   const [notes, setNotes] = useState<BoardNote[]>([]);
-  const [noteToast, setNoteToast] = useState<string | null>(null);
-
   const [savingNoteIds, setSavingNoteIds] = useState<Set<string>>(new Set());
   const [noteSavedAt, setNoteSavedAt] = useState<Record<string, number>>({});
-  const noteTimers = useRef<Record<string, number | NodeJS.Timeout>>({});
 
-  const BOARD_HEIGHT = 780;
+  const [toast, setToast] = useState<string | null>(null);
+  const [noteToast, setNoteToast] = useState<string | null>(null);
+
+  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const noteTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   /* ---------------------- Load canonical themed rows ---------------------- */
   useEffect(() => {
@@ -335,10 +313,7 @@ function BoardSurface({
               id: r.id,
               xPct: r.x_pct,
               yPct: r.y_pct,
-              zone:
-                (r.zone ??
-                  prev[k]?.zone ??
-                  DEFAULTS[k].zone) as Zone,
+              zone: (r.zone ?? prev[k]?.zone ?? DEFAULTS[k].zone) as Zone,
               collapsed: !!r.collapsed,
               updatedAt: new Date(r.updated_at).getTime(),
             };
@@ -381,6 +356,7 @@ function BoardSurface({
   function queueSave(key: BoardItemKey) {
     const t = timers.current[key];
     if (t) clearTimeout(t);
+
     timers.current[key] = setTimeout(async () => {
       if (!token) return;
       const r = rowsRef.current[key];
@@ -406,14 +382,11 @@ function BoardSurface({
 
   /* ------------------------ Save reviewer notes/cards --------------------- */
 
-  function queueSaveNote(
-    id: string,
-    reason: "title" | "body" | "position" | "collapse"
-  ) {
+  function queueSaveNote(id: string, reason: "title" | "position" | "collapse") {
     const t = noteTimers.current[id];
-    if (t) clearTimeout(t as number);
+    if (t) clearTimeout(t);
 
-    if (reason === "title" || reason === "body") {
+    if (reason === "title") {
       setSavingNoteIds((prev) => new Set(prev).add(id));
     }
 
@@ -428,7 +401,7 @@ function BoardSurface({
           p_x_pct: n.xPct,
           p_y_pct: n.yPct,
           p_title: n.title,
-          p_body: n.body,
+          p_body: n.body, // still send body even though we don't render it
           p_collapsed: n.collapsed,
           p_reviewer_label: null,
         });
@@ -440,7 +413,7 @@ function BoardSurface({
         setNoteToast("Save failed");
         setTimeout(() => setNoteToast(null), 1600);
       } finally {
-        if (reason === "title" || reason === "body") {
+        if (reason === "title") {
           setSavingNoteIds((prev) => {
             const next = new Set(prev);
             next.delete(id);
@@ -463,8 +436,8 @@ function BoardSurface({
       id: tempId,
       xPct: draftX,
       yPct: draftY,
-      title: "Your title",
-      body: "• Bullet point 1\n• Bullet point 2",
+      title: "New theme",
+      body: "", // no bullet body anymore
       collapsed: false,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -498,12 +471,8 @@ function BoardSurface({
                 title: saved.out_title || "",
                 body: saved.out_body || "",
                 collapsed: saved.out_collapsed,
-                createdAt: new Date(
-                  saved.out_created_at
-                ).getTime(),
-                updatedAt: new Date(
-                  saved.out_updated_at
-                ).getTime(),
+                createdAt: new Date(saved.out_created_at).getTime(),
+                updatedAt: new Date(saved.out_updated_at).getTime(),
               }
             : n
         )
@@ -526,32 +495,10 @@ function BoardSurface({
     if (!canEdit) return;
     setNotes((list) =>
       list.map((n) =>
-        n.id === id
-          ? {
-              ...n,
-              title,
-              updatedAt: Date.now(),
-            }
-          : n
+        n.id === id ? { ...n, title, updatedAt: Date.now() } : n
       )
     );
     queueSaveNote(id, "title");
-  }
-
-  function updateNoteBody(id: string, body: string) {
-    if (!canEdit) return;
-    setNotes((list) =>
-      list.map((n) =>
-        n.id === id
-          ? {
-              ...n,
-              body,
-              updatedAt: Date.now(),
-            }
-          : n
-      )
-    );
-    queueSaveNote(id, "body");
   }
 
   function toggleNoteCollapse(id: string) {
@@ -573,18 +520,13 @@ function BoardSurface({
   async function deleteNote(id: string) {
     if (!token || !canEdit) return;
     try {
-      const { error } = await supabase.rpc(
-        "board_notes_delete",
-        {
-          p_token: token,
-          p_id: id,
-        }
-      );
+      const { error } = await supabase.rpc("board_notes_delete", {
+        p_token: token,
+        p_id: id,
+      });
       if (error) throw error;
 
-      setNotes((list) =>
-        list.filter((n) => n.id !== id)
-      );
+      setNotes((list) => list.filter((n) => n.id !== id));
       setNoteToast("Card deleted");
       setTimeout(() => setNoteToast(null), 1500);
     } catch (e) {
@@ -596,14 +538,9 @@ function BoardSurface({
 
   /* ------------------------------ dragging -------------------------------- */
 
-  function startDrag(
-    e: React.PointerEvent,
-    key: BoardItemKey
-  ) {
+  function startDragThemed(e: React.PointerEvent, key: BoardItemKey) {
     if (!canEdit) return;
-    (e.target as HTMLElement).setPointerCapture?.(
-      e.pointerId
-    );
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
 
     const surface = surfaceRef.current;
     if (!surface) return;
@@ -615,12 +552,8 @@ function BoardSurface({
     const onMove = (ev: PointerEvent) => {
       const dx = ev.clientX - start.x;
       const dy = ev.clientY - start.y;
-      const nx = clamp(
-        startItem.xPct + (dx / rect.width) * 100
-      );
-      const ny = clamp(
-        startItem.yPct + (dy / rect.height) * 100
-      );
+      const nx = clamp(startItem.xPct + (dx / rect.width) * 100);
+      const ny = clamp(startItem.yPct + (dy / rect.height) * 100);
       setRows((r) => ({
         ...r,
         [key]: {
@@ -632,14 +565,8 @@ function BoardSurface({
     };
 
     const onUp = () => {
-      window.removeEventListener(
-        "pointermove",
-        onMove
-      );
-      window.removeEventListener(
-        "pointerup",
-        onUp
-      );
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
       queueSave(key);
     };
 
@@ -647,52 +574,41 @@ function BoardSurface({
     window.addEventListener("pointerup", onUp);
   }
 
-  function startDragNote(
-    e: React.PointerEvent,
-    id: string
-  ) {
+  function startDragNote(e: React.PointerEvent, id: string) {
     if (!canEdit) return;
-    (e.target as HTMLElement).setPointerCapture?.(
-      e.pointerId
-    );
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
 
     const surface = surfaceRef.current;
     if (!surface) return;
 
     const rect = surface.getBoundingClientRect();
-    const start = { x: e.clientX, y: e.clientY };
-    const startItem = notes.find(
-      (n) => n.id === id
-    );
-    if (!startItem) return;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const current = notes.find((n) => n.id === id);
+    if (!current) return;
 
     const onMove = (ev: PointerEvent) => {
-      const dx = ev.clientX - start.x;
-      const dy = ev.clientY - start.y;
-      const nx = clamp(
-        startItem.xPct + (dx / rect.width) * 100
-      );
-      const ny = clamp(
-        startItem.yPct + (dy / rect.height) * 100
-      );
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      const nx = clamp(current.xPct + (dx / rect.width) * 100);
+      const ny = clamp(current.yPct + (dy / rect.height) * 100);
       setNotes((list) =>
         list.map((n) =>
           n.id === id
-            ? { ...n, xPct: nx, yPct: ny }
+            ? {
+                ...n,
+                xPct: nx,
+                yPct: ny,
+                updatedAt: Date.now(),
+              }
             : n
         )
       );
     };
 
     const onUp = () => {
-      window.removeEventListener(
-        "pointermove",
-        onMove
-      );
-      window.removeEventListener(
-        "pointerup",
-        onUp
-      );
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
       queueSaveNote(id, "position");
     };
 
@@ -700,292 +616,75 @@ function BoardSurface({
     window.addEventListener("pointerup", onUp);
   }
 
-  /* ------------------------------------------------------------------------ */
+  /* -------------------------------- render --------------------------------- */
 
   return (
-    <>
-      {/* toast for canonical cards */}
-      {toast && (
-        <div className="fixed z-[70] bottom-4 right-4 rounded-lg border border-neutral-300 bg-white text-neutral-900 px-3 py-2 shadow">
-          <div className="text-sm">{toast}</div>
-        </div>
-      )}
-
-      {/* toast for reviewer cards */}
-      {noteToast && (
-        <div className="fixed z-[70] bottom-20 right-4 rounded-lg border border-neutral-300 bg-white text-neutral-900 px-3 py-2 shadow">
-          <div className="text-sm">{noteToast}</div>
-        </div>
-      )}
-
-      {/* BOARD SURFACE */}
+    <div className="relative w-full">
+      {/* surface frame */}
       <div
         ref={surfaceRef}
-        className="relative w-screen"
-        style={{ height: BOARD_HEIGHT }}
+        className="relative h-[600px] bg-white overflow-hidden"
       >
-        {/* backdrop zones */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 px-6 md:px-10">
-            {/* CORE */}
-            <div
-              ref={coreRef}
-              className="rounded-2xl border-4 border-black bg-neutral-900 p-4"
-            >
-              <div className="text-xs uppercase tracking-wide text-neutral-300 mb-2">
-                Core lens
-              </div>
-              <div className="rounded-lg bg-neutral-100 h-[400px]" />
+        {/* ---------- background zones (underlay) ---------- */}
+        <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-4 z-0 pointer-events-none select-none text-[11px] leading-snug">
+          {/* Core lens */}
+          <div className="relative rounded-xl border border-neutral-200 bg-neutral-50/70 shadow-inner p-3">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-neutral-700 mb-1">
+              Core lens
             </div>
-
-            {/* SECONDARY */}
-            <div
-              ref={secondaryRef}
-              className="rounded-2xl border-4 border-black bg-neutral-900 p-4"
-            >
-              <div className="text-xs uppercase tracking-wide text-neutral-300 mb-2">
-                Secondary lens
-              </div>
-              <div className="rounded-lg bg-neutral-100 h-[400px]" />
+            <div className="text-[11px] text-neutral-500">
+              What you would lead with first.
             </div>
           </div>
 
-          {/* SUPPORTING + UNUSED */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 px-6 md:px-10 mt-6">
-            <div
-              ref={supportingRef}
-              className="rounded-2xl border-4 border-black bg-neutral-900 p-4 md:col-span-2"
-            >
-              <div className="text-xs uppercase tracking-wide text-neutral-300 mb-2">
-                Supporting themes
-              </div>
-              <div className="rounded-lg bg-neutral-100 h-[300px]" />
+          {/* Secondary lens */}
+          <div className="relative rounded-xl border border-neutral-200 bg-neutral-50/70 shadow-inner p-3">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-neutral-700 mb-1">
+              Secondary lens
             </div>
+            <div className="text-[11px] text-neutral-500">
+              Still strong, usually needs context.
+            </div>
+          </div>
 
-            <div
-              ref={unusedRef}
-              className="rounded-2xl border-4 border-black bg-neutral-900 p-4"
-            >
-              <div className="text-xs uppercase tracking-wide text-neutral-300 mb-2">
-                Unused
+          {/* Supporting themes */}
+          <div className="relative rounded-xl border border-neutral-200 bg-neutral-50/70 shadow-inner p-3">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-neutral-700 mb-1">
+              Supporting themes
+            </div>
+            <div className="text-[11px] text-neutral-500">
+              Proof points that reinforce the main story.
+            </div>
+          </div>
+
+          {/* Unused / Parking lot */}
+          <div className="relative rounded-xl border border-neutral-200 bg-neutral-50/70 shadow-inner p-3">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-[11px] font-medium uppercase tracking-wide text-neutral-700 mb-1">
+                  Unused
+                </div>
+                <div className="text-[11px] text-neutral-500">
+                  Interesting, but maybe not core yet.
+                </div>
               </div>
-              <div className="rounded-lg bg-neutral-100 h-[300px]" />
             </div>
           </div>
         </div>
+        {/* ---------- end background zones ---------- */}
 
-        {/* canonical themed cards */}
-        {(Object.keys(rows) as BoardItemKey[]).map((k) => {
-          const r = rows[k];
-          return (
-            <div
-              key={k}
-              className={
-                "absolute z-10 " +
-                (canEdit
-                  ? "cursor-grab active:cursor-grabbing"
-                  : "cursor-default opacity-95")
-              }
-              style={{
-                left: `${r.xPct}%`,
-                top: `${r.yPct}%`,
-                transform: "translate(-40%, -24px)",
-              }}
-              onPointerDown={(e) => startDrag(e, k)}
-            >
-              {r.collapsed ? (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!canEdit) return;
-                    setRows((curr) => ({
-                      ...curr,
-                      [k]: {
-                        ...curr[k],
-                        collapsed: !curr[k].collapsed,
-                      },
-                    }));
-                    queueSave(k);
-                  }}
-                  className="rounded-full border border-neutral-300 bg-white shadow px-4 pt-1.5 pb-1 text-md text-neutral-800 font-semibold"
-                  title={LABELS[k]}
-                >
-                  {LABELS[k]
-                    .replace(/^Design\s+as\s+/i, "")
-                    .replace(/^Design\s+/i, "")
-                    .replace(/&/g, "and")
-                    .split(" ")[0]
-                    .slice(0, 20)}
-                </button>
-              ) : (
-                <div className="w-[300px] max-w-[84vw] rounded-xl border border-neutral-200 bg-white shadow p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <h4 className="font-semibold text-neutral-900">
-                      {LABELS[k]}
-                    </h4>
+        {/* Themed chips (default items) */}
+        {(Object.keys(rows) as BoardItemKey[]).map((key) => (
+          <ThemeCard
+            key={key}
+            row={rows[key]}
+            label={LABELS[key]}
+            canEdit={canEdit}
+            onStartDrag={startDragThemed}
+          />
+        ))}
 
-                    {canEdit && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setRows((curr) => ({
-                            ...curr,
-                            [k]: {
-                              ...curr[k],
-                              collapsed: !curr[k].collapsed,
-                            },
-                          }));
-                          queueSave(k);
-                        }}
-                        className="text-neutral-500 hover:text-neutral-800"
-                        title="Collapse"
-                      >
-                        <svg
-                          viewBox="0 0 24 24"
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        >
-                          <path d="M5 12h14" />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-
-                  {/* value bullets + appearance badge */}
-                  {(() => {
-                    switch (k) {
-                      case "customer":
-                        return (
-                          <>
-                            <ul className="mt-3 space-y-2 list-disc pl-5 text-sm text-neutral-700 tracking-[0.01em]">
-                              <li>
-                                Design positions itself as the organization’s
-                                voice of the customer.
-                              </li>
-                              <li>
-                                Research, journey maps, and direct user exposure
-                                correct internal bias and de-risk bets.
-                              </li>
-                            </ul>
-                            <AppearanceBadge
-                              level={appearanceByTheme?.[k]}
-                            />
-                          </>
-                        );
-                      case "integrator":
-                        return (
-                          <>
-                            <ul className="mt-3 space-y-2 list-disc pl-5 text-sm text-neutral-700 tracking-[0.01em]">
-                              <li>
-                                Design acts as the glue bridging silos and
-                                aligning product, engineering, and business.
-                              </li>
-                              <li>
-                                Early testing and prototyping prevent rework,
-                                saving time and money.
-                              </li>
-                            </ul>
-                            <AppearanceBadge
-                              level={appearanceByTheme?.[k]}
-                            />
-                          </>
-                        );
-                      case "differentiator":
-                        return (
-                          <>
-                            <ul className="mt-3 space-y-2 list-disc pl-5 text-sm text-neutral-700 tracking-[0.01em]">
-                              <li>
-                                Design can elevate experience quality, brand
-                                trust, and the overall user experience.
-                              </li>
-                              <li>
-                                Some contexts avoid this lens when markets are
-                                less competitive or to avoid reducing design to
-                                aesthetics.
-                              </li>
-                            </ul>
-                            <AppearanceBadge
-                              level={appearanceByTheme?.[k]}
-                            />
-                          </>
-                        );
-                      case "strategic":
-                        return (
-                          <>
-                            <ul className="mt-3 space-y-2 list-disc pl-5 text-sm text-neutral-700 tracking-[0.01em]">
-                              <li>
-                                With credibility, design can contributes to
-                                upstream framing and futures work.
-                              </li>
-                              <li>
-                                This typically happens in more mature contexts
-                                after prior wins earn strategic access.
-                              </li>
-                            </ul>
-                            <AppearanceBadge
-                              level={appearanceByTheme?.[k]}
-                            />
-                          </>
-                        );
-                      case "consistency":
-                        return (
-                          <>
-                            <ul className="mt-3 space-y-2 list-disc pl-5 text-sm text-neutral-700 tracking-[0.01em]">
-                              <li>
-                                Shared standards and systems create coherence at
-                                scale, reduce ambiguity, and compound trust over
-                                time - often becoming a subtle, durable
-                                differentiator.
-                              </li>
-                            </ul>
-                            <AppearanceBadge
-                              level={appearanceByTheme?.[k]}
-                            />
-                          </>
-                        );
-                      case "culture":
-                        return (
-                          <>
-                            <ul className="mt-3 space-y-2 list-disc pl-5 text-sm text-neutral-700 tracking-[0.01em]">
-                              <li>
-                                Design talks, internal cases, and applying
-                                design to internal processes keep practices from
-                                regressing amid turnover and legacy habits.
-                              </li>
-                            </ul>
-                            <AppearanceBadge
-                              level={appearanceByTheme?.[k]}
-                            />
-                          </>
-                        );
-                      case "creativity":
-                        return (
-                          <>
-                            <ul className="mt-3 space-y-2 list-disc pl-5 text-sm text-neutral-700 tracking-[0.01em]">
-                              <li>
-                                Some leaders emphasize designers’ unique
-                                capacity to envision non-obvious possibilities,
-                                tying design to innovation.
-                              </li>
-                            </ul>
-                            <AppearanceBadge
-                              level={appearanceByTheme?.[k]}
-                            />
-                          </>
-                        );
-                      default:
-                        return null;
-                    }
-                  })()}
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        {/* reviewer-created editable cards */}
+        {/* Reviewer-created cards (editable notes) */}
         {notes.map((note) => (
           <ReviewerBoardCard
             key={note.id}
@@ -995,22 +694,33 @@ function BoardSurface({
             savedAt={noteSavedAt[note.id]}
             onStartDrag={startDragNote}
             onTitleChange={updateNoteTitle}
-            onBodyChange={updateNoteBody}
             onToggleCollapse={toggleNoteCollapse}
             onDelete={deleteNote}
           />
         ))}
 
-        {canEdit && (
-            <button
-              onClick={createNewNote}
-              className="absolute right-14 bottom-[-60] z-30 rounded-lg border border-neutral-300 bg-white text-neutral-900 px-3 py-1.5 shadow text-sm cursor-pointer"
-              title="Add your own card to the board"
-            >
-              + Add another card
-            </button>
-          )}
+        {/* Add-card button */}
+        {canEdit ? (
+          <button
+            onClick={createNewNote}
+            className="absolute bottom-2 right-2 rounded-lg border border-neutral-300 bg-white text-neutral-800 text-[13px] px-3 py-1.5 shadow-sm"
+          >
+            + Add theme
+          </button>
+        ) : null}
       </div>
-    </>
+
+      {/* toasts */}
+      {toast && (
+        <div className="absolute -bottom-8 right-0 text-xs text-neutral-600">
+          {toast}
+        </div>
+      )}
+      {noteToast && (
+        <div className="absolute -bottom-8 left-0 text-xs text-neutral-600">
+          {noteToast}
+        </div>
+      )}
+    </div>
   );
 }
