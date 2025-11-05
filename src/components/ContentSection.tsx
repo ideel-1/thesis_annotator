@@ -1,18 +1,23 @@
 "use client";
 
-type SliderView = {
-  value: number;
-  saving: boolean;
-};
+import { useRef, useState, useEffect } from "react";
+import ThemeCommentPanel from "./ThemeCommentPanel";
+import { supabase } from "@/lib/supabaseClient";
+import BoardOverlay from "./BoardOverlay";
 
+type SliderView = { value: number; saving: boolean };
 type SlidersMap = Record<string, SliderView>;
 
-type ContentSectionProps = {
+type Props = {
   sliders: SlidersMap;
   onChange: (sectionKey: string, itemKey: string, nextVal: number) => void;
+  token?: string | null;
+  canComment: boolean;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  columnRef: React.RefObject<HTMLDivElement | null>;
 };
 
-function ImportanceSliderControlled({
+function InlineSlider({
   value,
   saving,
   labelLeft,
@@ -23,7 +28,7 @@ function ImportanceSliderControlled({
   saving: boolean;
   labelLeft: string;
   labelRight: string;
-  onChange: (nextVal: number) => void;
+  onChange: (v: number) => void;
 }) {
   return (
     <div className="mt-6">
@@ -31,16 +36,14 @@ function ImportanceSliderControlled({
         <span>{labelLeft}</span>
         <span>{labelRight}</span>
       </div>
-
       <input
         type="range"
         min={0}
         max={100}
         value={value ?? 50}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-neutral-900"
+        className="w-full accent-neutral-900 cursor-grab active:cursor-grabbing"
       />
-
       <div className="text-[11px] text-neutral-400 text-right mt-1 tabular-nums">
         {saving ? "Saving…" : "Saved"}
       </div>
@@ -56,151 +59,334 @@ function Block({
   itemKey,
   sliders,
   onChange,
+  token,
+  canComment,
+  containerRef,
+  columnRef,
 }: {
   index: number;
   title: string;
   bullets: string[];
-  sectionKey: string; // "content"
-  itemKey: string; // "customer_connection", etc.
+  sectionKey: string;
+  itemKey: string;
   sliders: SlidersMap;
   onChange: (sectionKey: string, itemKey: string, nextVal: number) => void;
+  token?: string | null;
+  canComment: boolean;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  columnRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const sliderId = `${sectionKey}::${itemKey}`;
   const sliderState = sliders[sliderId] || { value: 50, saving: false };
 
+  const [open, setOpen] = useState(false);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+
+  const [hasNote, setHasNote] = useState(false);
+
+  // --- Callbacks from ThemeCommentPanel to keep anchor button in sync
+  const handleSaved = (text: string) => {
+    setHasNote(!!text.trim());
+  };
+
+  const handleDeleted = async () => {
+    setHasNote(false);
+    setOpen(false);
+  
+    // Ensure future restores won’t reopen a deleted panel (defensive)
+    if (token) {
+      try {
+        await supabase.rpc("theme_comment_panel_open_set", {
+          p_token: token,
+          p_section_key: sectionKey,
+          p_item_key: itemKey,
+          p_is_open: false,
+        });
+      } catch (err) {
+        console.error("Failed to persist is_open=false after delete", err);
+      }
+    }
+  };
+  
+
+  const handleCollapsedChange = async (collapsed: boolean, text: string) => {
+    // Presence depends on content, not the collapsed flag
+    setHasNote(!!text.trim());
+  
+    if (token) {
+      try {
+        await supabase.rpc("theme_comment_panel_open_set", {
+          p_token: token,
+          p_section_key: sectionKey,
+          p_item_key: itemKey,
+          p_is_open: collapsed ? false : true,
+        });
+      } catch (err) {
+        console.error("Failed to persist is_open after collapse toggle", err);
+      }
+    }
+  
+    if (collapsed) setOpen(false);
+  };
+  
+
+  // --- Open via red anchor button (persist is_open=true)
+  const openPersisted = async () => {
+    if (!token) {
+      setOpen(true);
+      return;
+    }
+    await supabase.rpc("theme_comment_panel_open_set", {
+      p_token: token,
+      p_section_key: sectionKey,
+      p_item_key: itemKey,
+      p_is_open: true,
+    });
+    setOpen(true);
+  };
+
+  // --- Close helper used by the panel's onClose (persist is_open=false)
+  const closePanel = async () => {
+    if (token) {
+      await supabase.rpc("theme_comment_panel_open_set", {
+        p_token: token,
+        p_section_key: sectionKey,
+        p_item_key: itemKey,
+        p_is_open: false,
+      });
+    }
+    setOpen(false);
+  };
+
+  // --- Initial fetch: detect presence, auto-restore if (is_open && !collapsed)
+  useEffect(() => {
+    let cancelled = false;
+    if (!token || !canComment) return;
+
+    (async () => {
+      const { data, error } = await supabase.rpc("theme_panel_get", {
+        p_token: token,
+        p_section_key: sectionKey,
+        p_item_key: itemKey,
+      });
+      if (cancelled || error) return;
+
+      const r = Array.isArray(data) ? data[0] : data;
+      const present = !!(r?.text && String(r.text).trim().length > 0);
+      setHasNote(present);
+
+      if (r?.is_open && r?.collapsed === false) {
+        setOpen(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, canComment, sectionKey, itemKey]);
+
   return (
     <section className="flex gap-4 w-full">
       <div className="shrink-0">
-        <div className="text-4xl font-semibold text-neutral-300 leading-none tabular-nums">
+        <div className="text-4xl font-semibold text-neutral-300/90 leading-none tabular-nums tracking-tight select-none mt-0.5">
           {index.toString().padStart(2, "0")}
         </div>
       </div>
 
-      <div className="flex-1">
-        <div className="rounded-xl border border-neutral-200 bg-white shadow-sm p-5">
-          <h3 className="text-base font-semibold text-neutral-900 mb-3">
-            {title}
-          </h3>
+      <div className="relative flex-1">
+      <div
+        ref={cardRef}
+        className="group relative rounded-xl border border-neutral-200 bg-white shadow-sm p-5
+                  transition-shadow duration-150 hover:shadow-md"
+      >
+        <div className="flex items-start justify-between">
+          <h3 className="text-[1.0625rem] font-semibold text-neutral-900 tracking-tight mb-3">{title}</h3>
+        </div>
 
-          <ul className="list-disc pl-5 space-y-2 text-sm text-neutral-700 leading-relaxed">
+        {canComment && token ? (
+          <button
+            data-theme-comment-trigger
+            onClick={openPersisted}
+            className={`absolute top-2 -right-25 translate-x-2 -translate-y-2 rounded-lg px-2.5 py-1 text-xs cursor-pointer
+              ${hasNote
+                ? "bg-emerald-700 text-white shadow ring-1 ring-emerald-800/40"
+                : "bg-red-600 text-white shadow ring-1 ring-red-700/40 hover:bg-red-700"}`}
+            title={hasNote ? "View/edit comment" : "Add comment"}
+          >
+            {hasNote ? "Comment ✓" : "+ Comment"}
+          </button>
+        ) : null}
+
+          <ul className="list-disc pl-5 space-y-1.5 text-[0.95rem] leading-relaxed text-neutral-800 marker:text-neutral-400">
             {bullets.map((b, i) => (
               <li key={i}>{b}</li>
             ))}
           </ul>
 
-          <ImportanceSliderControlled
+          <InlineSlider
             value={sliderState.value}
             saving={sliderState.saving}
-            labelLeft="Low priority for me"
-            labelRight="Central to my pitch"
-            onChange={(nextVal) => onChange(sectionKey, itemKey, nextVal)}
+            labelLeft="Not relevant"
+            labelRight="Need to understand very well"
+            onChange={(v) => onChange(sectionKey, itemKey, v)}
           />
         </div>
+
+        {open && token ? (
+          <ThemeCommentPanel
+            token={token}
+            sectionKey={sectionKey}
+            itemKey={itemKey}
+            containerRef={containerRef}
+            columnRef={columnRef}
+            anchorRef={cardRef}
+            onClose={() => setOpen(false)}
+            onSaved={handleSaved}
+            onDeleted={handleDeleted}
+            onCollapsedChange={handleCollapsedChange}
+          />
+        ) : null}
       </div>
     </section>
   );
 }
 
-export default function ContentSection({ sliders, onChange }: ContentSectionProps) {
+export default function ContentSection(props: Props) {
+  const { sliders, onChange, token, canComment, containerRef, columnRef } = props;
   return (
     <div className="flex flex-col gap-10">
       <Block
         index={1}
         title="Connection to Customer"
         bullets={[
-          "We represent the real customer, not an internal assumption.",
-          "We reduce guesswork by grounding decisions in observed behavior, not opinion.",
-          "We surface unmet needs early, before costly build decisions.",
+          "Represent real customer signals instead of assumptions.",
+          "Ground decisions in observed behavior, not opinion.",
+          "Surface unmet needs before costly builds.",
         ]}
         sectionKey="content"
-        itemKey="customer_connection"
+        itemKey="customer"
         sliders={sliders}
         onChange={onChange}
+        token={token}
+        canComment={canComment}
+        containerRef={containerRef}
+        columnRef={columnRef}
       />
-
       <Block
         index={2}
         title="Integration / Efficiency"
         bullets={[
-          "We align product, engineering, and business around a shared view of the problem.",
-          "We reduce rework by clarifying scope and removing ambiguity early.",
-          "We accelerate delivery because teams stop building the wrong thing.",
+          "Align product, engineering, and business around a shared problem view.",
+          "Reduce rework by removing ambiguity early.",
+          "Accelerate delivery by avoiding building the wrong thing.",
         ]}
         sectionKey="content"
-        itemKey="integration_efficiency"
+        itemKey="integrator"
         sliders={sliders}
         onChange={onChange}
+        token={token}
+        canComment={canComment}
+        containerRef={containerRef}
+        columnRef={columnRef}
       />
-
       <Block
         index={3}
         title="Differentiation / Quality"
         bullets={[
-          "We create product quality and experience that competitors cannot easily copy.",
-          "We shape moments that make the offer feel unique, credible, and premium.",
-          "We help avoid 'generic' outcomes that erode perceived value.",
+          "Create experiences competitors cannot copy easily.",
+          "Shape moments that feel unique, credible, and premium.",
+          "Avoid generic outcomes that erode perceived value.",
         ]}
         sectionKey="content"
-        itemKey="differentiation_quality"
+        itemKey="differentiator"
         sliders={sliders}
         onChange={onChange}
+        token={token}
+        canComment={canComment}
+        containerRef={containerRef}
+        columnRef={columnRef}
       />
-
       <Block
         index={4}
         title="Strategic Lens / Foresight"
         bullets={[
-          "We frame direction in human terms instead of only technical or financial terms.",
-          "We create narratives about where the product/service should move next.",
-          "We help leadership see beyond immediate delivery into future positioning.",
+          "Frame direction in human terms (not only technical/financial).",
+          "Create narratives about where the product should move next.",
+          "Help leadership see beyond immediate delivery.",
         ]}
         sectionKey="content"
-        itemKey="strategic_lens"
+        itemKey="strategic"
         sliders={sliders}
         onChange={onChange}
+        token={token}
+        canComment={canComment}
+        containerRef={containerRef}
+        columnRef={columnRef}
       />
-
       <Block
         index={5}
         title="Consistency & Scale"
         bullets={[
-          "We create reusable patterns, guidelines, systems - less chaos, less drift.",
-          "We make it possible to ship faster while looking and behaving coherent.",
-          "We protect brand credibility across touchpoints.",
+          "Standards and systems reduce cognitive load and delivery variance.",
+          "Scale good patterns; shrink avoidable divergence.",
+          "Enable multiple teams to ship with coherence.",
         ]}
         sectionKey="content"
-        itemKey="consistency_scale"
+        itemKey="consistency"
         sliders={sliders}
         onChange={onChange}
+        token={token}
+        canComment={canComment}
+        containerRef={containerRef}
+        columnRef={columnRef}
       />
-
       <Block
         index={6}
         title="Culture / Evangelism"
         bullets={[
-          "We spread a way of thinking: curiosity about real users, evidence before opinion.",
-          "We model cross-functional collaboration rather than functional turf wars.",
-          "We normalize talking about usability and experience in leadership forums.",
+          "Grow organizational literacy: roadshows, brown-bags, embeds.",
+          "Make customer stories travel; celebrate wins tied to outcomes.",
+          "Recruit allies who can repeat the message in key rooms.",
         ]}
         sectionKey="content"
-        itemKey="culture_evangelism"
+        itemKey="culture"
         sliders={sliders}
         onChange={onChange}
+        token={token}
+        canComment={canComment}
+        containerRef={containerRef}
+        columnRef={columnRef}
       />
-
       <Block
         index={7}
-        title="Creativity as Resource"
+        title="Designer's Creativity"
         bullets={[
-          "We generate alternative possibilities when teams are stuck in one solution.",
-          "We explore unconventional moves leadership can take to stand out.",
-          "We de-risk 'new bets' by making them tangible early.",
+          "Designers have natural capability to be creative.",
+          "Using creative exploration to unlock new economic paths.",
+          "De-risk 'new bets' by making them tangible early.",
         ]}
         sectionKey="content"
-        itemKey="creativity_resource"
+        itemKey="creativity"
         sliders={sliders}
         onChange={onChange}
+        token={token}
+        canComment={canComment}
+        containerRef={containerRef}
+        columnRef={columnRef}
       />
+
+      {/* Prioritization Board */}
+      <div className="mt-12">
+        <h3 className="text-base font-semibold text-neutral-900 mb-3">
+          Prioritization Board
+        </h3>
+        <p className="text-neutral-700 text-sm mb-3">
+          Drag default themes (and add your own notes) to indicate priority and grouping. Your layout autosaves.
+        </p>
+        <div className="rounded-xl border border-neutral-200 bg-white shadow-sm p-4">
+          <BoardOverlay token={token} canEdit={!!canComment} />
+        </div>
+      </div>
     </div>
   );
 }

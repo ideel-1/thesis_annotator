@@ -1,9 +1,6 @@
 import React, { Suspense } from "react";
 
 import ClientAnnotator from "./ClientAnnotator";
-import ContextSection from "@/components/ContextSection";
-import ContentSection from "@/components/ContentSection";
-import CommunicationSection from "@/components/CommunicationSection";
 
 export default function Page() {
   return (

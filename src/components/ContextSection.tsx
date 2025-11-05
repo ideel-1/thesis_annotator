@@ -1,18 +1,22 @@
 "use client";
 
-type SliderView = {
-  value: number;
-  saving: boolean;
-};
+import { useRef, useState, useEffect } from "react";
+import ThemeCommentPanel from "./ThemeCommentPanel";
+import { supabase } from "@/lib/supabaseClient";
 
+type SliderView = { value: number; saving: boolean };
 type SlidersMap = Record<string, SliderView>;
 
-type ContextSectionProps = {
+type Props = {
   sliders: SlidersMap;
   onChange: (sectionKey: string, itemKey: string, nextVal: number) => void;
+  token?: string | null;
+  canComment: boolean;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  columnRef: React.RefObject<HTMLDivElement | null>;
 };
 
-function ImportanceSliderControlled({
+function InlineSlider({
   value,
   saving,
   labelLeft,
@@ -23,7 +27,7 @@ function ImportanceSliderControlled({
   saving: boolean;
   labelLeft: string;
   labelRight: string;
-  onChange: (nextVal: number) => void;
+  onChange: (v: number) => void;
 }) {
   return (
     <div className="mt-6">
@@ -31,16 +35,14 @@ function ImportanceSliderControlled({
         <span>{labelLeft}</span>
         <span>{labelRight}</span>
       </div>
-
       <input
         type="range"
         min={0}
         max={100}
         value={value ?? 50}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-neutral-900"
+        className="w-full accent-neutral-900 cursor-grab active:cursor-grabbing"
       />
-
       <div className="text-[11px] text-neutral-400 text-right mt-1 tabular-nums">
         {saving ? "Saving…" : "Saved"}
       </div>
@@ -56,111 +58,279 @@ function Block({
   itemKey,
   sliders,
   onChange,
+  token,
+  canComment,
+  containerRef,
+  columnRef,
 }: {
   index: number;
   title: string;
   bullets: string[];
-  sectionKey: string; // "context"
-  itemKey: string; // "org_position"
+  sectionKey: string;
+  itemKey: string;
   sliders: SlidersMap;
   onChange: (sectionKey: string, itemKey: string, nextVal: number) => void;
+  token?: string | null;
+  canComment: boolean;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  columnRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const sliderId = `${sectionKey}::${itemKey}`;
   const sliderState = sliders[sliderId] || { value: 50, saving: false };
 
+  const [open, setOpen] = useState(false);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+
+  const [hasNote, setHasNote] = useState(false);
+
+  // --- Callbacks from ThemeCommentPanel to keep anchor button in sync
+  const handleSaved = (text: string) => {
+    setHasNote(!!text.trim());
+  };
+
+  const handleDeleted = async () => {
+    setHasNote(false);
+    setOpen(false);
+  
+    // Ensure future restores won’t reopen a deleted panel (defensive)
+    if (token) {
+      try {
+        await supabase.rpc("theme_comment_panel_open_set", {
+          p_token: token,
+          p_section_key: sectionKey,
+          p_item_key: itemKey,
+          p_is_open: false,
+        });
+      } catch (err) {
+        console.error("Failed to persist is_open=false after delete", err);
+      }
+    }
+  };
+  
+
+  const handleCollapsedChange = async (collapsed: boolean, text: string) => {
+    // Presence depends on content, not the collapsed flag
+    setHasNote(!!text.trim());
+  
+    if (token) {
+      try {
+        await supabase.rpc("theme_comment_panel_open_set", {
+          p_token: token,
+          p_section_key: sectionKey,
+          p_item_key: itemKey,
+          p_is_open: collapsed ? false : true,
+        });
+      } catch (err) {
+        console.error("Failed to persist is_open after collapse toggle", err);
+      }
+    }
+  
+    if (collapsed) setOpen(false);
+  };
+  
+
+  // --- Open via red anchor button (persist is_open=true)
+  const openPersisted = async () => {
+    if (!token) {
+      setOpen(true);
+      return;
+    }
+    await supabase.rpc("theme_comment_panel_open_set", {
+      p_token: token,
+      p_section_key: sectionKey,
+      p_item_key: itemKey,
+      p_is_open: true,
+    });
+    setOpen(true);
+  };
+
+  // --- Close helper used by the panel's onClose (persist is_open=false)
+  const closePanel = async () => {
+    if (token) {
+      await supabase.rpc("theme_comment_panel_open_set", {
+        p_token: token,
+        p_section_key: sectionKey,
+        p_item_key: itemKey,
+        p_is_open: false,
+      });
+    }
+    setOpen(false);
+  };
+
+  // --- Initial fetch: detect presence, auto-restore if (is_open && !collapsed)
+  useEffect(() => {
+    let cancelled = false;
+    if (!token || !canComment) return;
+
+    (async () => {
+      const { data, error } = await supabase.rpc("theme_panel_get", {
+        p_token: token,
+        p_section_key: sectionKey,
+        p_item_key: itemKey,
+      });
+      if (cancelled || error) return;
+
+      const r = Array.isArray(data) ? data[0] : data;
+      const present = !!(r?.text && String(r.text).trim().length > 0);
+      setHasNote(present);
+
+      if (r?.is_open && r?.collapsed === false) {
+        setOpen(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, canComment, sectionKey, itemKey]);
+
   return (
     <section className="flex gap-4 w-full">
-      {/* index number */}
       <div className="shrink-0">
-        <div className="text-4xl font-semibold text-neutral-300 leading-none tabular-nums">
+        <div className="text-4xl font-semibold text-neutral-300/90 leading-none tabular-nums tracking-tight select-none mt-0.5">
           {index.toString().padStart(2, "0")}
         </div>
       </div>
 
-      {/* card */}
-      <div className="flex-1">
-        <div className="rounded-xl border border-neutral-200 bg-white shadow-sm p-5">
-          <h3 className="text-base font-semibold text-neutral-900 mb-3">
-            {title}
-          </h3>
+      <div className="relative flex-1">
+      <div
+        ref={cardRef}
+        className="group relative rounded-xl border border-neutral-200 bg-white shadow-sm p-5
+                  transition-shadow duration-150 hover:shadow-md"
+      >
+        <div className="flex items-start justify-between">
+          <h3 className="text-[1.0625rem] font-semibold text-neutral-900 tracking-tight mb-3">{title}</h3>
+        </div>
 
-          <ul className="list-disc pl-5 space-y-2 text-sm text-neutral-700 leading-relaxed">
+        {canComment && token ? (
+          <button
+            data-theme-comment-trigger
+            onClick={openPersisted}
+            className={`absolute top-2 -right-25 translate-x-2 -translate-y-2 rounded-lg px-2.5 py-1 text-xs cursor-pointer
+                        ${hasNote
+                          ? "bg-emerald-700 text-white shadow ring-1 ring-emerald-800/40"
+                          : "bg-red-600 text-white shadow ring-1 ring-red-700/40 hover:bg-red-700"}`}
+            title={hasNote ? "View/edit comment" : "Add comment"}
+          >
+            {hasNote ? "Comment ✓" : "+ Comment"}
+          </button>
+        ) : null}
+
+          <ul className="list-disc pl-5 space-y-1.5 text-[0.95rem] leading-relaxed text-neutral-800 marker:text-neutral-400">
             {bullets.map((b, i) => (
               <li key={i}>{b}</li>
             ))}
           </ul>
 
-          <ImportanceSliderControlled
+          <InlineSlider
             value={sliderState.value}
             saving={sliderState.saving}
             labelLeft="Not relevant"
             labelRight="Need to understand very well"
-            onChange={(nextVal) => onChange(sectionKey, itemKey, nextVal)}
+            onChange={(v) => onChange(sectionKey, itemKey, v)}
           />
         </div>
+
+        {open && token ? (
+          <ThemeCommentPanel
+            token={token}
+            sectionKey={sectionKey}
+            itemKey={itemKey}
+            containerRef={containerRef}
+            columnRef={columnRef}
+            anchorRef={cardRef}
+            onClose={() => setOpen(false)}
+            onSaved={handleSaved}
+            onDeleted={handleDeleted}
+            onCollapsedChange={handleCollapsedChange}
+          />
+        ) : null}
       </div>
     </section>
   );
 }
 
-export default function ContextSection({ sliders, onChange }: ContextSectionProps) {
+export default function ContextSection({
+  sliders,
+  onChange,
+  token,
+  canComment,
+  containerRef,
+  columnRef,
+}: Props) {
   return (
     <div className="flex flex-col gap-10">
       <Block
         index={1}
         title="Organizational Position of Design"
         bullets={[
-          "Centralized teams offer coherence and scale but risk isolation.",
+          "Centralized teams offer coherence/scale but risk isolation.",
           "Embedded models gain proximity yet can fragment.",
-          "Executive access varies (often no Chief Design Officer), which shapes whether design enters strategy or remains delivery-focused.",
-          "Under-resourcing (for example: one designer to dozens of developers) can further limit influence.",
+          "Executive access (often no CDO) conditions entry into strategy.",
+          "Under-resourcing (e.g., 1 designer : 20+ devs) constrains influence.",
         ]}
         sectionKey="context"
         itemKey="org_position"
         sliders={sliders}
         onChange={onChange}
+        token={token}
+        canComment={canComment}
+        containerRef={containerRef}
+        columnRef={columnRef}
       />
 
       <Block
         index={2}
         title="Purpose of Advocacy Work"
         bullets={[
-          "Advocacy is everyday work to pull design upstream toward problem framing.",
-          "Leaders shift perception from 'making things pretty' toward customer evidence and better decision-making.",
-          "The job is to enlarge design’s formal mandate in the organization.",
+          "Day-to-day work to pull design upstream toward problem framing.",
+          "Shift perception from 'making things pretty' to customer evidence and decision quality.",
+          "Grow the formal mandate of design within governance/prioritization.",
         ]}
         sectionKey="context"
-        itemKey="advocacy_work"
+        itemKey="advocacy_nature"
         sliders={sliders}
         onChange={onChange}
+        token={token}
+        canComment={canComment}
+        containerRef={containerRef}
+        columnRef={columnRef}
       />
 
       <Block
         index={3}
         title="Internal Stakeholders and Audiences"
         bullets={[
-          "Executives, peer leads, and middle managers respond to different arguments.",
-          "Finance-heavy leadership expects risk/impact framing; middle layers sometimes shortcut research or copy competitors.",
-          "Receptivity depends heavily on prior exposure to design.",
+          "Executives, peer leads, and middle managers react to different arguments.",
+          "Finance-oriented leaders expect risk/impact framing; middle layers may shortcut research.",
+          "Receptivity depends on prior exposure to design and current incentives.",
         ]}
         sectionKey="context"
         itemKey="stakeholders"
         sliders={sliders}
         onChange={onChange}
+        token={token}
+        canComment={canComment}
+        containerRef={containerRef}
+        columnRef={columnRef}
       />
 
       <Block
         index={4}
-        title="Constraints and Enablers"
+        title="Constraints and Dynamics"
         bullets={[
-          "Barriers: hierarchy, siloed structures, inertia, and scarce resources.",
-          "Enablers: executive sponsorship, rising literacy, and visible delivery wins that create credibility.",
-          "Allies (for example PMs or engineering leads) can legitimize design’s strategic role.",
+          "Budget cycles, shifting leaders, and metrics shape advocacy windows.",
+          "Organizational literacy and historical wins/losses set credibility.",
+          "Allies, forums, and timing matter as much as arguments.",
         ]}
         sectionKey="context"
-        itemKey="constraints_enablers"
+        itemKey="constraints"
         sliders={sliders}
         onChange={onChange}
+        token={token}
+        canComment={canComment}
+        containerRef={containerRef}
+        columnRef={columnRef}
       />
     </div>
   );

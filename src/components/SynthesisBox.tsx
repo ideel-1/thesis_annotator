@@ -5,127 +5,108 @@ import { supabase } from "@/lib/supabaseClient";
 
 type SynthesisBoxProps = {
   token: string | null;
-  sectionKey: string; // e.g. "synthesis_main"
+  sectionKey?: string;       // defaults to "synthesis_main"
   canEdit: boolean;
+  label?: string;            // optional UI label
+  placeholder?: string;      // optional placeholder
 };
 
 export default function SynthesisBox({
   token,
-  sectionKey,
+  sectionKey = "synthesis_main",
   canEdit,
+  label = "Final thoughts",
+  placeholder = "Write a short synthesis: what resonates, what’s missing, what you would change…",
 }: SynthesisBoxProps) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState<string>("");
   const [saving, setSaving] = useState(false);
-  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const [justSavedAt, setJustSavedAt] = useState<number | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const taRef = useRef<HTMLTextAreaElement | null>(null);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // auto-resize textarea height to fit content
-  function resizeTextarea() {
+  const taRef = useRef<HTMLTextAreaElement | null>(null);
+  const saveTimerRef = useRef<number | null>(null);
+
+  // Auto-resize the textarea to fit content
+  function resize() {
     const ta = taRef.current;
     if (!ta) return;
     ta.style.height = "auto";
     ta.style.height = `${ta.scrollHeight}px`;
   }
 
-  // Load existing synthesis on mount
+  // Initial load
   useEffect(() => {
-    async function load() {
+    let dead = false;
+    (async () => {
       if (!token) return;
       const { data, error } = await supabase.rpc("synthesis_get", {
         p_token: token,
         p_section_key: sectionKey,
       });
+      if (dead) return;
       if (error) {
         console.error("synthesis_get error", error);
-        return;
-      }
-      if (data && data.length > 0) {
+      } else if (Array.isArray(data) && data.length) {
         const row = data[0];
-        setText(row.content || "");
-        setLastSavedAt(new Date(row.updated_at).getTime());
+        setText(row.content ?? "");
       }
       setLoaded(true);
-    }
-    load();
+    })();
+    return () => { dead = true; };
   }, [token, sectionKey]);
 
-  // Resize textarea whenever text changes or after load
-  useEffect(() => {
-    resizeTextarea();
-  }, [text, loaded]);
+  // Resize on load/text change
+  useEffect(() => { resize(); }, [text, loaded]);
 
-  // Queue save to Supabase after edits
-  function queueSave(nextVal: string) {
+  // Debounced save
+  function queueSave(next: string) {
     if (!token) return;
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
     setSaving(true);
 
-    saveTimer.current = setTimeout(async () => {
-      try {
-        const { data, error } = await supabase.rpc("synthesis_upsert", {
-          p_token: token,
-          p_section_key: sectionKey,
-          p_text: nextVal,
-        });
-        if (error) {
-          console.error("synthesis_upsert error", error);
-        } else if (data && data.length > 0) {
-          const row = data[0];
-          setLastSavedAt(new Date(row.out_updated_at).getTime());
-        }
-      } finally {
-        setSaving(false);
-        saveTimer.current = null;
+    saveTimerRef.current = window.setTimeout(async () => {
+      const { data, error } = await supabase.rpc("synthesis_upsert", {
+        p_token: token,
+        p_section_key: sectionKey,
+        p_text: next,
+      });
+      setSaving(false);
+      if (error) {
+        console.error("synthesis_upsert error", error);
+        return;
       }
+      setJustSavedAt(Date.now());
+      window.setTimeout(() => setJustSavedAt(null), 1200);
+      // optional: could read returned timestamps if your RPC returns them
     }, 400);
   }
 
-  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+  function onChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     if (!canEdit) return;
-    const val = e.target.value;
-    setText(val);
-    resizeTextarea();
-    queueSave(val);
+    const v = e.target.value;
+    setText(v);
+    resize();
+    queueSave(v);
   }
 
   return (
-    <div className="rounded-xl border border-neutral-200 bg-white shadow-sm p-5">
-      <label
-        htmlFor="synthesis-textarea"
-        className="block text-sm font-medium text-neutral-900 mb-2"
-      >
-        Your narrative
+    <div className="bg-white">
+      <label className="block text-sm font-medium text-neutral-900 mb-2">
+        {label}
       </label>
 
       <textarea
-        id="synthesis-textarea"
         ref={taRef}
         className="w-full text-sm leading-relaxed text-neutral-800 border border-neutral-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-neutral-800 focus:border-neutral-800 resize-none overflow-hidden"
-        style={{ minHeight: "160px" }}
-        placeholder={`Example opener:\n\n"Our design work protects us from building the wrong thing. It gives us early proof of what's valuable to customers, so we can focus investment where it matters. Here's why that matters for us right now..."`}
+        style={{ minHeight: 160 }}
+        placeholder={placeholder}
         value={text}
-        onChange={handleChange}
+        onChange={onChange}
         readOnly={!canEdit}
       />
 
-      <div className="mt-2 flex items-baseline justify-between">
-        <p className="text-[11px] text-neutral-500 leading-relaxed">
-          This draft helps me understand how you personally frame design inside
-          your environment.
-        </p>
-
-        <div className="text-[11px] text-neutral-500 tabular-nums ml-4 whitespace-nowrap">
-          {saving
-            ? "Saving…"
-            : lastSavedAt
-            ? "Saved"
-            : loaded
-            ? "Saved"
-            : ""}
-        </div>
+      <div className="mt-2 text-[12px] text-neutral-500 h-4">
+        {saving ? "Saving…" : justSavedAt ? "Saved" : null}
       </div>
     </div>
   );

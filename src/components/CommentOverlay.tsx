@@ -1,3 +1,5 @@
+/* -------------------------------NOT REALLY NEEDED-------------------------------------- */
+
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -21,6 +23,8 @@ type Comment = {
 type CommentOverlayProps = {
   reviewerLabel?: string; // e.g. "INT4"
   token: string;
+  /** Optional CSS selector of the section that should show/accept comments (e.g., "section#content"). */
+  scopeSelector?: string;
 };
 
 const clampPct = (v: number) => Math.max(0, Math.min(100, v));
@@ -39,13 +43,16 @@ function useAutosizeTextArea<T extends HTMLTextAreaElement>() {
 /*                            Component main body                              */
 /* -------------------------------------------------------------------------- */
 
-export default function CommentOverlay({ reviewerLabel, token }: CommentOverlayProps) {
+export default function CommentOverlay({
+  reviewerLabel,
+  token,
+  scopeSelector,
+}: CommentOverlayProps) {
   /* ----------------------- page measurement / canvas ----------------------- */
 
-  // We measure full scrollable document height once and on resize.
-  // We'll render an absolutely positioned overlay of that height.
-  // All comments live INSIDE that overlay, so their top/left % math lines up.
   const [docHeight, setDocHeight] = useState<number>(0);
+  const [scopeEl, setScopeEl] = useState<HTMLElement | null>(null);
+  const [scopeBounds, setScopeBounds] = useState<{ top: number; bottom: number } | null>(null); 
 
   const measurePage = useCallback(() => {
     const fullHeight = Math.max(
@@ -74,10 +81,75 @@ export default function CommentOverlay({ reviewerLabel, token }: CommentOverlayP
     };
   }, [measurePage]);
 
+  /* ------------------------------ scope bounds ----------------------------- */
+
+  const [scopeTop, setScopeTop] = useState(0);
+  const [scopeBottom, setScopeBottom] = useState(Infinity);
+
+  const measureScope = useCallback(() => {
+    if (!scopeSelector) {
+      setScopeTop(0);
+      setScopeBottom(Infinity);
+      return;
+    }
+    const el = document.querySelector(scopeSelector) as HTMLElement | null;
+    if (!el) {
+      setScopeTop(0);
+      setScopeBottom(Infinity);
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    const top = rect.top + window.scrollY;
+    const bottom = rect.bottom + window.scrollY;
+    setScopeTop(top);
+    setScopeBottom(bottom);
+  }, [scopeSelector]);
+
+  useEffect(() => {
+    function measureAll() {
+      const { height } = measurePage();
+      setDocHeight(height);
+  
+      if (scopeEl) {
+        const rect = scopeEl.getBoundingClientRect();
+        const top = rect.top + window.scrollY;
+        const bottom = rect.bottom + window.scrollY;
+        setScopeBounds({ top, bottom });
+      } else {
+        setScopeBounds(null);
+      }
+    }
+  
+    measureAll();
+    window.addEventListener("resize", measureAll);
+    window.addEventListener("load", measureAll);
+    return () => {
+      window.removeEventListener("resize", measureAll);
+      window.removeEventListener("load", measureAll);
+    };
+  }, [measurePage, scopeEl]);
+
+  function isInScope(yPct: number): boolean {
+    if (!scopeBounds) return true; // no scope => show all
+    const { height } = measurePage();
+    const yPx = (yPct / 100) * height;
+    return yPx >= scopeBounds.top && yPx <= scopeBounds.bottom;
+  }
+  
+
+  useEffect(() => {
+    measureScope();
+    window.addEventListener("resize", measureScope);
+    window.addEventListener("scroll", measureScope, { passive: true });
+    return () => {
+      window.removeEventListener("resize", measureScope);
+      window.removeEventListener("scroll", measureScope);
+    };
+  }, [measureScope]);
+
   /* ---------------------------- local state ---------------------------- */
 
   const draftInputRef = useRef<HTMLTextAreaElement | null>(null);
-
   const [code, setCode] = useState<string | null>(null);
   const [editing, setEditing] = useState<boolean>(true);
 
@@ -86,7 +158,7 @@ export default function CommentOverlay({ reviewerLabel, token }: CommentOverlayP
 
   const [toast, setToast] = useState<string | null>(null);
 
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
 
   const [savingTextIds, setSavingTextIds] = useState<Set<string>>(new Set());
   const [savedAt, setSavedAt] = useState<Record<string, number>>({});
@@ -252,37 +324,43 @@ export default function CommentOverlay({ reviewerLabel, token }: CommentOverlayP
     })();
   }, [draft, comments, token]);
 
-  // Right-click to start draft. Placement is in PAGE % coords, not viewport.
+  // Right-click to start draft. Only inside scope (if provided).
   useEffect(() => {
     if (!editing) return;
-
+  
     function onCtx(e: MouseEvent) {
       const target = e.target as HTMLElement | null;
+  
+      // If we have a scope element, ignore right-clicks outside it
+      if (scopeEl && target && !scopeEl.contains(target)) return;
+  
+      // Also ignore right-clicks on an existing comment
       if (target && target.closest("[data-comment-box]")) return;
-
+  
       e.preventDefault();
-
+  
       const { width, height } = measurePage();
-
-      // cursor absolute in document
       const pageX = e.clientX + window.scrollX;
       const pageY = e.clientY + window.scrollY;
-
+  
+      // If scoped, clamp Y into the section’s pixel range so drafts are always inside
+      const yPxClamped = scopeBounds
+        ? Math.max(scopeBounds.top, Math.min(scopeBounds.bottom, pageY))
+        : pageY;
+  
       const xPct = clampPct((pageX / width) * 100);
-      const yPct = clampPct((pageY / height) * 100);
-
+      const yPct = clampPct((yPxClamped / height) * 100);
+  
       setDraft({ xPct, yPct, text: "" });
     }
-
+  
     window.addEventListener("contextmenu", onCtx, { capture: true });
     return () => {
       window.removeEventListener("contextmenu", onCtx, { capture: true } as any);
     };
-  }, [editing, measurePage]);
+  }, [editing, measurePage, scopeEl, scopeBounds]);
 
   /* ----------------------------- delete flow ----------------------------- */
-
-  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
 
   function askDelete(id: string) {
     setConfirmingDeleteId(id);
@@ -313,7 +391,6 @@ export default function CommentOverlay({ reviewerLabel, token }: CommentOverlayP
   function startDrag(e: React.PointerEvent, id: string) {
     if (!editing) return;
 
-    // block drag if you actually clicked in textarea/input/button
     const tag = (e.target as HTMLElement).tagName.toLowerCase();
     if (tag === "textarea" || tag === "input" || tag === "button") return;
 
@@ -325,18 +402,17 @@ export default function CommentOverlay({ reviewerLabel, token }: CommentOverlayP
     const startXPct = pin.xPct;
     const startYPct = pin.yPct;
 
-    // cursor absolute (page) at drag start
     const startClientX = e.clientX + window.scrollX;
     const startClientY = e.clientY + window.scrollY;
 
     function onMove(ev: PointerEvent) {
-      const { width, height } = measurePage();
+      const { width } = measurePage();
 
-      const dxPx = (ev.clientX + window.scrollX) - startClientX;
-      const dyPx = (ev.clientY + window.scrollY) - startClientY;
+      const dxPx = ev.clientX + window.scrollX - startClientX;
+      const dyPx = ev.clientY + window.scrollY - startClientY;
 
       const nextXPct = clampPct(startXPct + (dxPx / width) * 100);
-      const nextYPct = clampPct(startYPct + (dyPx / height) * 100);
+      const nextYPct = clampPct(startYPct + (dyPx / docHeight) * 100);
 
       setComments((cs) =>
         cs.map((c) =>
@@ -355,7 +431,6 @@ export default function CommentOverlay({ reviewerLabel, token }: CommentOverlayP
     function onUp() {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
-
       queueSave(id, "position");
     }
 
@@ -397,7 +472,14 @@ export default function CommentOverlay({ reviewerLabel, token }: CommentOverlayP
     queueSave(id, "collapse");
   };
 
-  /* ------------------------------- render ------------------------------- */
+  /* ------------------------ visibility within scope ------------------------ */
+
+  const visibleComments = scopeBounds
+  ? comments.filter(c => isInScope(c.yPct))
+  : comments;
+
+
+  /* -------------------------------- render -------------------------------- */
 
   return (
     <>
@@ -418,13 +500,8 @@ export default function CommentOverlay({ reviewerLabel, token }: CommentOverlayP
       )}
 
       {/* FULL-PAGE OVERLAY LAYER */}
-      {/* This is the critical fix:
-         - It's one absolutely positioned container spanning the whole document height.
-         - pointer-events-none on the layer, BUT individual bubbles override with pointer-events-auto.
-         - All comment bubbles (and the draft bubble) are children of this layer,
-           so their top/left % coords map across full scroll length. */}
       <div
-        className="absolute left-0 top-0 w-screen pointer-events-none z-[60]"
+        className="absolute inset-x-0 top-0 w-full pointer-events-none z-[60]"
         style={{ height: `${docHeight}px` }}
       >
         {/* draft bubble inside overlay */}
@@ -475,8 +552,8 @@ export default function CommentOverlay({ reviewerLabel, token }: CommentOverlayP
           </div>
         )}
 
-        {/* existing comments, now INSIDE the overlay */}
-        {comments.map((c) => (
+        {/* existing comments, now filtered by scope */}
+        {visibleComments.map((c) => (
           <CommentBox
             key={c.id}
             c={c}
@@ -500,8 +577,7 @@ export default function CommentOverlay({ reviewerLabel, token }: CommentOverlayP
               Delete comment?
             </h3>
             <p className="text-sm text-neutral-600 mb-6">
-              This comment will be permanently removed from your reviewer
-              session.
+              This comment will be permanently removed from your reviewer session.
             </p>
             <div className="flex justify-center gap-3">
               <button
@@ -667,11 +743,7 @@ function CommentBox({
               </button>
 
               <div className="text-xs tabular-nums text-neutral-500">
-                {isSavingText
-                  ? "Saving…"
-                  : savedAt
-                  ? "Saved"
-                  : ""}
+                {isSavingText ? "Saving…" : savedAt ? "Saved" : ""}
               </div>
             </div>
           </div>

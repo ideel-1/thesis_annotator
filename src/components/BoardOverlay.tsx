@@ -1,3 +1,5 @@
+/* -------------------------------NOT REALLY NEEDED-------------------------------------- */
+
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -256,7 +258,7 @@ export default function BoardOverlay({
   canEdit,
 }: BoardOverlayProps) {
   return (
-    <div className="w-[60vw] max-w-[900px] min-w-[320px]">
+    <div className="w-full max-w-[950px]">
       <BoardSurface token={token} canEdit={canEdit} />
     </div>
   );
@@ -623,7 +625,7 @@ function BoardSurface({ token, canEdit }: BoardOverlayProps) {
       {/* surface frame */}
       <div
         ref={surfaceRef}
-        className="relative h-[600px] bg-white overflow-hidden"
+        className="relative w-full h-[600px] bg-white overflow-hidden"
       >
         {/* ---------- background zones (underlay) ---------- */}
         <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-4 z-0 pointer-events-none select-none text-[11px] leading-snug">
