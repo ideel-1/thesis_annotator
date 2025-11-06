@@ -207,10 +207,10 @@ function Block({
           <button
             data-theme-comment-trigger
             onClick={openPersisted}
-            className={`absolute top-2 -right-25 translate-x-2 -translate-y-2 rounded-lg px-2.5 py-1 text-xs cursor-pointer
+            className={`absolute top-3 -right-27.5 translate-x-2 -translate-y-2 rounded-lg px-2.5 py-1 text-sm cursor-pointer
               ${hasNote
                 ? "bg-emerald-700 text-white shadow ring-1 ring-emerald-800/40"
-                : "bg-red-600 text-white shadow ring-1 ring-red-700/40 hover:bg-red-700"}`}
+                : "bg-black text-white shadow ring-1 ring-black hover:bg-neutral-600"}`}
             title={hasNote ? "View/edit comment" : "Add comment"}
           >
             {hasNote ? "Comment ✓" : "+ Comment"}
@@ -226,8 +226,8 @@ function Block({
           <InlineSlider
             value={sliderState.value}
             saving={sliderState.saving}
-            labelLeft="Not relevant"
-            labelRight="Need to understand very well"
+            labelLeft="Not used"
+            labelRight="Central to my advocacy"
             onChange={(v) => onChange(sectionKey, itemKey, v)}
           />
         </div>
@@ -255,6 +255,9 @@ export default function ContentSection(props: Props) {
   const { sliders, onChange, token, canComment, containerRef, columnRef } = props;
   return (
     <div className="flex flex-col gap-10">
+      <div>
+        <h2 className=" text-4xl font-semibold italic text-neutral-300"> Core themes</h2>
+      </div>
       <Block
         index={1}
         title="Connection to Customer"
@@ -323,6 +326,9 @@ export default function ContentSection(props: Props) {
         containerRef={containerRef}
         columnRef={columnRef}
       />
+      <div>
+        <h2 className="text-4xl font-semibold italic text-neutral-300"> Supporting themes</h2>
+      </div>
       <Block
         index={5}
         title="Consistency & Scale"
@@ -377,11 +383,11 @@ export default function ContentSection(props: Props) {
 
       {/* Prioritization Board */}
       <div className="mt-12">
-        <h3 className="text-base font-semibold text-neutral-900 mb-3">
+        <h3 className=" text-4xl font-semibold italic text-neutral-300 mb-3">
           Prioritization Board
         </h3>
-        <p className="text-neutral-700 text-sm mb-3">
-          Drag default themes (and add your own notes) to indicate priority and grouping. Your layout autosaves.
+        <p className="text-neutral-700 text-md mb-3">
+          Please drag the abovementioned default themes (and add your own notes) to indicate priority and grouping. Your layout autosaves. 
         </p>
         <div className="rounded-xl border border-neutral-200 bg-white shadow-sm p-4">
           <BoardOverlay token={token} canEdit={!!canComment} />

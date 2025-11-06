@@ -277,7 +277,7 @@ const [panelHeight, setPanelHeight] = useState(0);
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200">
         <div className="text-sm font-medium">{row.title || "Comment"}</div>
-        <button onClick={collapse} className="text-neutral-500 hover:text-neutral-900" title="Collapse">
+        <button onClick={collapse} className="cursor-pointer text-neutral-500 hover:text-neutral-900" title="Collapse">
           –
         </button>
       </div>
@@ -298,7 +298,7 @@ const [panelHeight, setPanelHeight] = useState(0);
 
       {/* Footer */}
       <div className="px-4 pb-4 flex items-center justify-between">
-        <button onClick={deletePanel} className="text-[12px] text-neutral-500 hover:text-red-600">
+        <button onClick={deletePanel} className="cursor-pointer text-[12px] text-neutral-500 hover:text-red-600">
           Delete
         </button>
 
@@ -311,7 +311,7 @@ const [panelHeight, setPanelHeight] = useState(0);
 
           <button
             onClick={commitNow}
-            className="rounded-md border border-neutral-900 bg-neutral-900 px-3 py-1 text-[12px] text-white"
+            className="cursor-pointer rounded-md border border-neutral-900 bg-neutral-900 px-3 py-1 text-[12px] text-white"
             title="Save now"
           >
             ✓

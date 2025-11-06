@@ -705,7 +705,7 @@ function BoardSurface({ token, canEdit }: BoardOverlayProps) {
         {canEdit ? (
           <button
             onClick={createNewNote}
-            className="absolute bottom-2 right-2 rounded-lg border border-neutral-300 bg-white text-neutral-800 text-[13px] px-3 py-1.5 shadow-sm"
+            className="cursor-pointer absolute bottom-2 right-2 rounded-lg border border-neutral-300 bg-white text-neutral-800 text-[13px] px-3 py-1.5 shadow-sm hover:bg-neutral-200"
           >
             + Add theme
           </button>

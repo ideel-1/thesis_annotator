@@ -68,6 +68,7 @@ function Banner({
         Reviewer <strong>{reviewer.label}</strong> -{" "}
         {reviewer.canComment ? "commenting enabled" : "view-only"}
       </span>
+      {/*
       {reviewer.canComment && (
         <button
           onClick={() => onToggleDone(!done)}
@@ -80,6 +81,7 @@ function Banner({
           {savingDone ? "Saving…" : done ? "✓ Marked done" : "Mark as done"}
         </button>
       )}
+      */}
     </div>
   );
 }
@@ -263,88 +265,53 @@ export default function ClientAnnotator() {
         {/* INTRO */}
         {activeStep === "intro" && (
           
-          <section id="intro" className="mx-auto max-w-2xl w-full pb-24">
+          <section id="intro" className="mx-auto max-w-2xl w-full">
             <h1 className="text-4xl font-bold mb-16 text-center text-neutral-900">
               Master Thesis: arguing for design in larger organizations
             </h1>
 
             <div className="mx-auto max-w-2xl w-full">
-              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">
+              <h2 className=" text-4xl font-semibold italic text-neutral-300 mb-4">
                 Introduction
               </h2>
-              <p className="text-neutral-800 text-base leading-relaxed">
+              <p className="text-neutral-800 text-base leading-relaxed mt-4">
+                The purpose of this page is to understand whether the findings
+                I have drawn from data are aligned with the way you see design advocacy, or if there are significant differences.
+              </p>
+              <p className="text-neutral-800 text-base leading-relaxed mt-4">
               This page presents three interconnected aspects of design advocacy
                drawn from interviews with design leaders:
               </p>
 
-              <ul className="list-disc pl-5 space-y-2 text-neutral-800 text-base leading-relaxed mt-4">
-                <li>
+              <ul className="pl-5 space-y-2 text-neutral-800 text-base leading-relaxed mt-4">
+                <li className="mb-4 mt-4">
                 1. <strong>Organizational context</strong> (where design sits and how it accesses strategy)
                 </li>
-                <li>
+                <li className="mb-4 mt-4">
                 2. <strong>Advocacy content</strong> (the value arguments used to justify design’s role)
                 </li>
-                <li>
+                <li className="mb-4 mt-4">
                 3. <strong>Communication tactics</strong> (how those arguments gain credibility internally)
                 </li>
               </ul>
-
               <p className="text-neutral-800 text-base leading-relaxed mt-4">
-                Each theme reflects patterns observed in practice - please rate their relevance
+              Each theme reflects patterns observed in practice - please rate their relevance
                to your organization, leave comments, and reorder the lenses on the board as you see fit.
               </p>
 
               <p className="italic text-neutral-800 text-base leading-relaxed mt-4">
               Your feedback will help refine how design’s value is framed. 
-              To comment, right-click on any "+ Comment" on a theme, edit, 
+              To comment, please right-click on any "<span className="font-medium">+ Comment</span>" button on a theme, then edit, 
               and collapse notes using the minus icon. Comments are saved under your
-               reviewer token and remain private between you and the author.
+               reviewer token and private between you and the author.
               </p>
 
             </div>
-            {/*
-            <div className="relative italic rounded-2xl border border-neutral-200 bg-white shadow-sm p-6 mb-12">
-              <h2 className="text-lg font-semibold text-neutral-900 mb-3">
-                <span className="not-italic">⌘</span> Welcome & How to Comment
-              </h2>
-
-              <p className="text-neutral-800 text-base leading-relaxed mb-4">
-                Hi and welcome! Thank you for taking the time to review this page. Your feedback will help
-                refine how the argument for design’s value is framed and communicated.
-              </p>
-
-              <p className="text-neutral-800 text-base leading-relaxed mb-4">
-                Please use the comment tool to share your thoughts as you
-                read. I’m equally interested in points you agree with,
-                those you disagree with, and anything that feels
-                unclear, missing, or overstated.
-              </p>
-
-              <ul className="list-disc pl-5 space-y-2 text-neutral-800 text-base leading-relaxed mb-4">
-                <li>
-                  <strong>Right-click</strong> anywhere on this page to create a comment. Press the checkmark button to confirm them.
-                </li>
-                <li>
-                  <strong>Drag</strong> comments to reposition them.
-                </li>
-                <li>
-                  Use the <strong>minus icon</strong> to collapse or hide a note once
-                  reviewed.
-                </li>
-              </ul>
-
-              <p className="text-neutral-700 text-base leading-relaxed">
-                All comments are linked to your reviewer token and are visible only to you
-                and the author.
-              </p>
-            </div>
-            */}
-
             <div className="mx-auto max-w-2xl w-full">
               <div className="mt-8 flex items-center justify-center gap-4">
                 <button
                   onClick={goNext}
-                  className="rounded-lg cursor-pointer border border-neutral-900 bg-neutral-900 px-4 py-1.5 text-sm text-white shadow-sm"
+                  className="rounded-lg cursor-pointer border border-neutral-900 bg-neutral-900 px-4 py-1.5 text-sm text-white shadow-sm hover:bg-neutral-600"
                 >
                   Continue
                 </button>
@@ -390,10 +357,10 @@ export default function ClientAnnotator() {
                   columnRef={contextColumnRef}
                 />
                 <div className="mt-8 flex items-center justify-center gap-4">
-                  <button onClick={goPrev} className="rounded-lg cursor-pointer border border-neutral-300 bg-white px-3 py-1.5 text-sm">
+                  <button onClick={goPrev} className="rounded-lg cursor-pointer border border-neutral-300 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100">
                     Back
                   </button>
-                  <button onClick={goNext} className="rounded-lg cursor-pointer border border-neutral-900 bg-neutral-900 px-4 py-1.5 text-sm text-white">
+                  <button onClick={goNext} className="rounded-lg cursor-pointer border border-neutral-900 bg-neutral-900 px-4 py-1.5 text-sm text-white hover:bg-neutral-600">
                     Continue
                   </button>
                 </div>
@@ -415,15 +382,15 @@ export default function ClientAnnotator() {
                   <p className="text-neutral-700 text-base leading-relaxed mb-4">
                     These themes summarize how design leaders frame the
                      value of design to make it relevant, fundable, and 
-                     legitimate. In practice, leaders mix several narratives
-                      at once - customer closeness, integration and efficiency
-                      , differentiation and quality, strategic foresight, and
+                     legitimate. In practice, leaders might mix several narrative lenses
+                      at once - design as a way to understand the customer, design for integration and efficiency,
+                      differentiation and quality, strategic foresight, and
                        more - depending on audience and timing.
                   </p>
                   <p className="text-neutral-700 text-base leading-relaxed mb-12">
                     Please indicate how central each theme is to how you
                      currently “sell” design internally. Add a comment
-                      where a theme feels off or something is missing for your context.
+                      where a theme feels off, something is missing for your context, or you have some additional thoughts.
                   </p>
                 </div>
                 <ContentSection
@@ -435,10 +402,10 @@ export default function ClientAnnotator() {
                   columnRef={contentColumnRef}
                 />
                 <div className="mt-8 flex items-center justify-center gap-4">
-                  <button onClick={goPrev} className="rounded-lg cursor-pointer border border-neutral-300 bg-white px-3 py-1.5 text-sm">
+                  <button onClick={goPrev} className="rounded-lg cursor-pointer border border-neutral-300 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100">
                     Back
                   </button>
-                  <button onClick={goNext} className="rounded-lg cursor-pointer border border-neutral-900 bg-neutral-900 px-4 py-1.5 text-sm text-white">
+                  <button onClick={goNext} className="rounded-lg cursor-pointer border border-neutral-900 bg-neutral-900 px-4 py-1.5 text-sm text-white hover:bg-neutral-600">
                     Continue
                   </button>
                 </div>
@@ -465,7 +432,7 @@ export default function ClientAnnotator() {
                         metrics, not abstract appeals.
                   </p>
                   <p className="text-neutral-700 text-base leading-relaxed mb-12">
-                    Rate how persuasive each communication tactic is in your
+                    Rate how effective using each communication tactic is in your
                      organization, and use comments to note where and why a 
                      tactic does or does not work with your audiences.
                   </p>
@@ -479,10 +446,10 @@ export default function ClientAnnotator() {
                   columnRef={commColumnRef}
                 />
                 <div className="mt-8 flex items-center justify-center gap-4">
-                  <button onClick={goPrev} className="rounded-lg cursor-pointer border border-neutral-300 bg-white px-3 py-1.5 text-sm">
+                  <button onClick={goPrev} className="rounded-lg cursor-pointer border border-neutral-300 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100">
                     Back
                   </button>
-                  <button onClick={goNext} className="rounded-lg cursor-pointer border border-neutral-900 bg-neutral-900 px-4 py-1.5 text-sm text-white">
+                  <button onClick={goNext} className="rounded-lg cursor-pointer border border-neutral-900 bg-neutral-900 px-4 py-1.5 text-sm text-white hover:bg-neutral-600">
                     Continue
                   </button>
                 </div>
@@ -520,30 +487,48 @@ export default function ClientAnnotator() {
               />
             </div>
 
-            {/* Navigation */}
-            <div className="mt-8 flex items-center justify-center gap-4">
-              <button
-                onClick={goPrev}
-                className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100"
-              >
-                ← Back
-              </button>
-              {/* Mark as done toggle */}
+            {/* Mark as done toggle */}
             {reviewer.state === "valid" && reviewer.canComment && (
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-center mt-8">
                 <button
-                  onClick={() => toggleDone(!done)}
-                  className={`rounded-lg border border-neutral-300 px-3 py-1.5 text-sm transition-colors ${
+                  type="button"
+                  onClick={() => !savingDone && toggleDone(!done)}
+                  disabled={savingDone}
+                  aria-pressed={done}
+                  aria-busy={savingDone || undefined}
+                  className={[
+                    "relative inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium",
+                    "transition-all duration-150",
+                    "focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+                    savingDone
+                      ? "cursor-wait opacity-90 ring-offset-white ring-neutral-300"
+                      : "cursor-pointer ring-offset-white border border-neutral-white",
                     done
-                      ? "border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800"
-                      : "border-neutral-400 bg-neutral-200 text-neutral-900 hover:bg-neutral-400"
-                  }`}
+                      ? "bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-400 shadow-sm"
+                      : "cursor-pointer bg-neutral-100 text-neutral-900 border border-neutral-300 hover:bg-neutral-200 focus-visible:ring-neutral-400 shadow-sm",
+                  ].join(" ")}
                 >
-                  {savingDone ? "Saving…" : done ? "✓ Marked done" : "Mark as done"}
+
+                  {/* Label */}
+                  <span className={savingDone ? "select-none" : ""}>
+                    {savingDone ? "Saving…" : done ? "✓ Marked done" : "Mark as done"}
+                  </span>
+
+                  {/* Success pulse halo (subtle) */}
+                  {done && !savingDone && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-0 rounded-xl ring-2 ring-emerald-400/40 animate-[ping_0.9s_ease-out_1]"
+                    />
+                  )}
                 </button>
               </div>
-            )}
-            </div>
+              )}
+              <div className="mt-4 flex items-center justify-center gap-4"> 
+                <button onClick={goPrev} className="cursor-pointer rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100" >
+                   ← Back 
+                </button> 
+              </div>
           </section>
         )}
       </main>

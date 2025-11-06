@@ -206,10 +206,10 @@ function Block({
           <button
             data-theme-comment-trigger
             onClick={openPersisted}
-            className={`absolute top-2 -right-25 translate-x-2 -translate-y-2 rounded-lg px-2.5 py-1 text-xs cursor-pointer
+            className={`absolute top-3 -right-27.5 translate-x-2 -translate-y-2 rounded-lg px-2.5 py-1 text-sm cursor-pointer
               ${hasNote
                 ? "bg-emerald-700 text-white shadow ring-1 ring-emerald-800/40"
-                : "bg-red-600 text-white shadow ring-1 ring-red-700/40 hover:bg-red-700"}`}
+                : "bg-black text-white shadow ring-1 ring-black hover:bg-neutral-600"}`}
             title={hasNote ? "View/edit comment" : "Add comment"}
           >
             {hasNote ? "Comment ✓" : "+ Comment"}
@@ -226,7 +226,7 @@ function Block({
             value={sliderState.value}
             saving={sliderState.saving}
             labelLeft="Not convincing"
-            labelRight="Highly persuasive"
+            labelRight="Highly effective"
             onChange={(v) => onChange(sectionKey, itemKey, v)}
           />
         </div>
