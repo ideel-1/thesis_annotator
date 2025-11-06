@@ -13,8 +13,32 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Thesis Annotator",
-  description: "Thesis annotator page",
+  title:"Master Thesis Feedback Page",
+  description: "Page for gathering feedback about design advocacy thesis.",
+  keywords: ["design", "advocacy", "thesis"],
+  openGraph: {
+    type: "website",
+    url: "https://thesis.radovanlamac.com",
+    title: "Master Thesis Feedback Page",
+    description: "Page for gathering feedback about design advocacy thesis..",
+    siteName: "Master Thesis Feedback Page",
+    images: [
+      {
+        url: "/public/og.png", // place file in /public/og.png
+        width: 1200,
+        height: 630,
+        alt: "Master Thesis Feedback Page Image",
+      },
+    ],
+  },
+  icons: {
+    icon: "public/favicon2.png",
+    shortcut: "public/favicon2.png",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({
